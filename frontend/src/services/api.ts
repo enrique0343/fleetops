@@ -1,8 +1,11 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
-const BASE_URL = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) 
-  ? (import.meta as any).env.VITE_API_URL 
-  : '/api';
+const RAW_BASE_URL =
+  typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL
+    ? String((import.meta as any).env.VITE_API_URL).replace(/\/$/, '')
+    : '';
+
+const BASE_URL = RAW_BASE_URL ? `${RAW_BASE_URL}/api` : '/api';
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -39,7 +42,7 @@ export default api;
 
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    const data = error.response?.data;
+    const data = error.response?.data as any;
     if (data?.error) return data.error;
     if (data?.errors?.length) return data.errors[0].msg;
     if (error.message === 'Network Error') return 'Sin conexión al servidor';
