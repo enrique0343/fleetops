@@ -13,13 +13,15 @@ import { errorHandler } from './middleware/errorHandler';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
+const HOST = '0.0.0.0';
 
 // ─── Middleware ───
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
 }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === 'development' ? 'dev' : 'combined'));
@@ -53,16 +55,6 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 // ─── Start ───
-app.listen(PORT, () => {
-  console.log(`
-╔══════════════════════════════════════╗
-║     FleetOps API v1.0.0             ║
-╠══════════════════════════════════════╣
-║  Port:    ${PORT}                       ║
-║  Env:     ${process.env.NODE_ENV || 'development'}           ║
-║  Health:  /health                    ║
-╚══════════════════════════════════════╝
-  `);
+app.listen(PORT, HOST, () => {
+  console.log(`FleetOps API running on http://${HOST}:${PORT}`);
 });
-
-export default app;
