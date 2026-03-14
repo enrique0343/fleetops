@@ -1,0 +1,310 @@
+// FleetOps - Prisma Schema
+// Corporate Transport Management System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  DRIVER
+  ADMIN
+}
+
+enum TripStatus {
+  IN_TRANSIT
+  IN_STOP
+  IN_INCIDENT
+  FINISHED
+  CANCELLED
+}
+
+enum ClosureType {
+  NORMAL
+  FORCED
+  ADMIN_CORRECTION
+}
+
+enum TelegramDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  NOT_CONFIGURED
+}
+
+enum TripEventType {
+  START_TRIP
+  ARRIVE_STOP
+  RESUME_TRIP
+  REPORT_INCIDENT
+  FINISH_TRIP
+  FORCE_CLOSE
+  ADMIN_CORRECTION
+  TELEGRAM_SENT
+  TELEGRAM_FAILED
+  FUEL_REGISTERED
+}
+
+enum LocationType {
+  BRANCH
+  DESTINATION
+  OPERATIONAL
+  OTHER
+}
+
+enum FuelUnit {
+  LITERS
+  GALLONS
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ─────────────────────────────────────────────
+// USER & AUTH
+// ─────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  fullName      String   @map("full_name")
+  role          UserRole @default(DRIVER)
+  phone         String?
+  isActive      Boolean  @default(true) @map("is_active")
+  branchId      String?  @map("branch_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  branch        Branch?  @relation(fields: [branchId], references: [id])
+
+  tripsAsDriver Trip[]       @relation("DriverTrips")
+  tripEvents    TripEvent[]
+  fuelRecords   FuelRecord[]
+  auditLogs     AuditLog[]
+  passwordResets PasswordReset[]
+
+  @@map("users")
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("password_resets")
+}
+
+// ─────────────────────────────────────────────
+// CATALOGS
+// ─────────────────────────────────────────────
+
+model Branch {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  address   String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users     User[]
+  vehicles  Vehicle[]
+  locations Location[]
+  tripsOrigin  Trip[] @relation("OriginBranch")
+  tripsClosure Trip[] @relation("ClosureBranch")
+  fuelRecords  FuelRecord[]
+
+  @@map("branches")
+}
+
+model Location {
+  id          String       @id @default(uuid())
+  name        String
+  type        LocationType @default(DESTINATION)
+  branchId    String?      @map("branch_id")
+  description String?
+  addressRef  String?      @map("address_ref")
+  lat         Float?
+  lng         Float?
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  branch Branch? @relation(fields: [branchId], references: [id])
+  trips  Trip[]  @relation("TripDestination")
+
+  @@map("locations")
+}
+
+model Vehicle {
+  id           String   @id @default(uuid())
+  plate        String   @unique
+  model        String
+  brand        String
+  year         Int?
+  vehicleType  String?  @map("vehicle_type")
+  branchId     String?  @map("branch_id")
+  fuelType     String?  @map("fuel_type")
+  color        String?
+  isActive     Boolean  @default(true) @map("is_active")
+  currentTripId String? @unique @map("current_trip_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  branch      Branch?      @relation(fields: [branchId], references: [id])
+  trips       Trip[]
+  fuelRecords FuelRecord[]
+
+  @@map("vehicles")
+}
+
+model IncidentType {
+  id          String           @id @default(uuid())
+  name        String
+  description String?
+  severity    IncidentSeverity @default(MEDIUM)
+  isActive    Boolean          @default(true) @map("is_active")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@map("incident_types")
+}
+
+// ─────────────────────────────────────────────
+// TRIPS
+// ─────────────────────────────────────────────
+
+model Trip {
+  id               String                 @id @default(uuid())
+  driverId         String                 @map("driver_id")
+  vehicleId        String                 @map("vehicle_id")
+  originBranchId   String                 @map("origin_branch_id")
+  destinationId    String                 @map("destination_id")
+  closureBranchId  String?                @map("closure_branch_id")
+
+  status           TripStatus             @default(IN_TRANSIT)
+  closureType      ClosureType?           @map("closure_type")
+
+  startedAt        DateTime               @map("started_at")
+  finishedAt       DateTime?              @map("finished_at")
+  durationMinutes  Int?                   @map("duration_minutes")
+
+  startLat         Float?                 @map("start_lat")
+  startLng         Float?                 @map("start_lng")
+  endLat           Float?                 @map("end_lat")
+  endLng           Float?                 @map("end_lng")
+
+  comment          String?
+  correctionFlag   Boolean                @default(false) @map("correction_flag")
+  forcedCloseFlag  Boolean                @default(false) @map("forced_close_flag")
+
+  telegramDeliveryStatus  TelegramDeliveryStatus  @default(PENDING) @map("telegram_delivery_status")
+  telegramLastAttemptAt   DateTime?               @map("telegram_last_attempt_at")
+  telegramLastResult      String?                 @map("telegram_last_result")
+
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+
+  driver          User        @relation("DriverTrips", fields: [driverId], references: [id])
+  vehicle         Vehicle     @relation(fields: [vehicleId], references: [id])
+  originBranch    Branch      @relation("OriginBranch", fields: [originBranchId], references: [id])
+  destination     Location    @relation("TripDestination", fields: [destinationId], references: [id])
+  closureBranch   Branch?     @relation("ClosureBranch", fields: [closureBranchId], references: [id])
+  events          TripEvent[]
+  fuelRecords     FuelRecord[]
+
+  @@map("trips")
+}
+
+model TripEvent {
+  id              String        @id @default(uuid())
+  tripId          String        @map("trip_id")
+  type            TripEventType
+  userId          String        @map("user_id")
+  deviceTimestamp DateTime      @map("device_timestamp")
+  serverTimestamp DateTime      @default(now()) @map("server_timestamp")
+  comment         String?
+  metadata        Json?
+
+  trip Trip @relation(fields: [tripId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("trip_events")
+}
+
+// ─────────────────────────────────────────────
+// FUEL
+// ─────────────────────────────────────────────
+
+model FuelRecord {
+  id             String   @id @default(uuid())
+  vehicleId      String   @map("vehicle_id")
+  driverId       String   @map("driver_id")
+  tripId         String?  @map("trip_id")
+  branchId       String?  @map("branch_id")
+
+  stationName    String   @map("station_name")
+  fuelType       String   @map("fuel_type")
+  quantity       Float
+  unit           FuelUnit @default(LITERS)
+  totalAmount    Float    @map("total_amount")
+  currency       String   @default("USD")
+  odometerKm     Float?   @map("odometer_km")
+  paymentMethod  String?  @map("payment_method")
+  receiptNumber  String?  @map("receipt_number")
+  isFullTank     Boolean  @default(true) @map("is_full_tank")
+  observation    String?
+  receiptPhotoUrl String? @map("receipt_photo_url")
+
+  correctedBy   String?  @map("corrected_by")
+  correctionNote String? @map("correction_note")
+  correctedAt   DateTime? @map("corrected_at")
+
+  recordedAt    DateTime @map("recorded_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  vehicle Vehicle  @relation(fields: [vehicleId], references: [id])
+  driver  User     @relation(fields: [driverId], references: [id])
+  trip    Trip?    @relation(fields: [tripId], references: [id])
+  branch  Branch?  @relation(fields: [branchId], references: [id])
+
+  @@map("fuel_records")
+}
+
+// ─────────────────────────────────────────────
+// AUDIT
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  entityName String   @map("entity_name")
+  entityId   String   @map("entity_id")
+  adminId    String   @map("admin_id")
+  action     String
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  reason     String?
+  timestamp  DateTime @default(now())
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@map("audit_logs")
+}
