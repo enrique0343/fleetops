@@ -82,24 +82,7 @@ export default function LoginPage() {
           </form>
         </div>
 
-        {/* Demo credentials hint */}
-        <div className="mt-4 bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-          <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wider">Credenciales de prueba</p>
-          <div className="space-y-1">
-            <p className="text-xs text-slate-400">
-              <span className="text-slate-500">Admin:</span>{' '}
-              <span className="font-mono text-slate-300">admin@fleetops.com</span>
-            </p>
-            <p className="text-xs text-slate-400">
-              <span className="text-slate-500">Driver:</span>{' '}
-              <span className="font-mono text-slate-300">carlos.mendez@fleetops.com</span>
-            </p>
-            <p className="text-xs text-slate-400">
-              <span className="text-slate-500">Pass:</span>{' '}
-              <span className="font-mono text-slate-300">Admin1234! / Driver1234!</span>
-            </p>
-          </div>
-        </div>
+
       </div>
     </div>
   );
