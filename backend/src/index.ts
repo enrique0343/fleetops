@@ -12,9 +12,25 @@ import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
 
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT_EXCEPTION:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED_REJECTION:', reason);
+});
+
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 const HOST = '0.0.0.0';
+
+console.log('Booting FleetOps API...');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT:', PORT);
+console.log('CORS_ORIGIN:', process.env.CORS_ORIGIN);
+console.log('DATABASE_URL exists:', Boolean(process.env.DATABASE_URL));
+console.log('DIRECT_URL exists:', Boolean(process.env.DIRECT_URL));
+console.log('JWT_SECRET exists:', Boolean(process.env.JWT_SECRET));
 
 // Middleware
 app.use(cors({
@@ -55,6 +71,10 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`FleetOps API running on http://${HOST}:${PORT}`);
+});
+
+server.on('error', (err) => {
+  console.error('SERVER_LISTEN_ERROR:', err);
 });
