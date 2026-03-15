@@ -16,7 +16,6 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 const HOST = '0.0.0.0';
 
-// ─── Middleware ───
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
@@ -26,7 +25,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === 'development' ? 'dev' : 'combined'));
 
-// ─── Health Check ───
 app.get('/health', (_, res) => {
   res.json({
     status: 'ok',
@@ -36,14 +34,12 @@ app.get('/health', (_, res) => {
   });
 });
 
-// ─── Routes ───
 app.use('/api/auth', authRoutes);
 app.use('/api/trips', tripsRoutes);
 app.use('/api/catalogs', catalogsRoutes);
 app.use('/api/fuel', fuelRoutes);
 app.use('/api/audit', auditRoutes);
 
-// ─── 404 ───
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -51,10 +47,13 @@ app.use((req, res) => {
   });
 });
 
-// ─── Error Handler ───
 app.use(errorHandler);
 
-// ─── Start ───
-app.listen(PORT, HOST, () => {
-  console.log(`FleetOps API running on http://${HOST}:${PORT}`);
-});
+// Solo escuchar puerto en local
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, HOST, () => {
+    console.log(`FleetOps API running on http://${HOST}:${PORT}`);
+  });
+}
+
+export default app;
