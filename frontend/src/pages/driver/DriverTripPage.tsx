@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useAuth } from '../../store/AuthContext';
 import api, { getErrorMessage } from '../../services/api';
 import { Trip, Branch, Vehicle, Location, IncidentType } from '../../types';
@@ -68,12 +68,15 @@ export default function DriverTripPage() {
         api.get('/catalogs/locations?type=DESTINATION'),
         api.get('/catalogs/incident-types'),
       ]);
+
       setBranches(brRes.data.data || []);
       setVehicles(vRes.data.data || []);
       setLocations(lRes.data.data || []);
       setIncidentTypes(iRes.data.data || []);
-      // Pre-fill origin branch if user has one
-      if (user?.branch?.id) setOriginBranchId(user.branch.id);
+
+      if (user?.branch?.id) {
+        setOriginBranchId(user.branch.id);
+      }
     } catch (err) {
       console.error('Error loading catalogs:', err);
     }
@@ -84,11 +87,13 @@ export default function DriverTripPage() {
     loadCatalogs();
   }, [loadActiveTrip, loadCatalogs]);
 
-  // ─── Actions ───
-
   const getGeoLocation = (): Promise<{ lat?: number; lng?: number }> =>
     new Promise((resolve) => {
-      if (!navigator.geolocation) return resolve({});
+      if (!navigator.geolocation) {
+        resolve({});
+        return;
+      }
+
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         () => resolve({}),
@@ -101,8 +106,10 @@ export default function DriverTripPage() {
       setError('Completa todos los campos requeridos');
       return;
     }
+
     setError('');
     setActionLoading('start');
+
     try {
       const geo = await getGeoLocation();
       const res = await api.post('/trips/start', {
@@ -113,6 +120,7 @@ export default function DriverTripPage() {
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
+
       setActiveTrip(res.data.data);
       setPhase('active');
     } catch (err) {
@@ -123,15 +131,19 @@ export default function DriverTripPage() {
   };
 
   const handleStop = async () => {
+    if (!activeTrip) return;
+
     setActionLoading('stop');
+
     try {
       const geo = await getGeoLocation();
-      const res = await api.post(`/trips/${activeTrip!.id}/stop`, {
+      const res = await api.post(`/trips/${activeTrip.id}/stop`, {
         comment: stopComment || undefined,
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
-      setActiveTrip(prev => prev ? { ...prev, status: res.data.data.status } : null);
+
+      setActiveTrip((prev) => (prev ? { ...prev, status: res.data.data.status } : null));
       setStopModal(false);
       setStopComment('');
     } catch (err) {
@@ -142,12 +154,16 @@ export default function DriverTripPage() {
   };
 
   const handleResume = async () => {
+    if (!activeTrip) return;
+
     setActionLoading('resume');
+
     try {
-      await api.post(`/trips/${activeTrip!.id}/resume`, {
+      await api.post(`/trips/${activeTrip.id}/resume`, {
         deviceTimestamp: new Date().toISOString(),
       });
-      setActiveTrip(prev => prev ? { ...prev, status: 'IN_TRANSIT' } : null);
+
+      setActiveTrip((prev) => (prev ? { ...prev, status: 'IN_TRANSIT' } : null));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -156,17 +172,20 @@ export default function DriverTripPage() {
   };
 
   const handleIncident = async () => {
-    if (!incidentComment.trim()) return;
+    if (!activeTrip || !incidentComment.trim()) return;
+
     setActionLoading('incident');
+
     try {
       const geo = await getGeoLocation();
-      await api.post(`/trips/${activeTrip!.id}/incident`, {
+      await api.post(`/trips/${activeTrip.id}/incident`, {
         incidentTypeId: incidentTypeId || undefined,
         comment: incidentComment,
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
-      setActiveTrip(prev => prev ? { ...prev, status: 'IN_INCIDENT' } : null);
+
+      setActiveTrip((prev) => (prev ? { ...prev, status: 'IN_INCIDENT' } : null));
       setIncidentModal(false);
       setIncidentComment('');
       setIncidentTypeId('');
@@ -178,29 +197,33 @@ export default function DriverTripPage() {
   };
 
   const handleFinish = async () => {
+    if (!activeTrip) return;
+
     setActionLoading('finish');
+
     try {
       const geo = await getGeoLocation();
-      await api.post(`/trips/${activeTrip!.id}/finish`, {
+      await api.post(`/trips/${activeTrip.id}/finish`, {
         closureBranchId: finishBranchId || undefined,
         comment: finishComment || undefined,
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
+
       setActiveTrip(null);
       setPhase('setup');
       setFinishModal(false);
       setVehicleId('');
       setDestinationId('');
       setTripComment('');
+      setFinishBranchId('');
+      setFinishComment('');
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
       setActionLoading('');
     }
   };
-
-  // ─── Render ───
 
   if (loading) {
     return (
@@ -213,11 +236,8 @@ export default function DriverTripPage() {
 
   return (
     <div className="p-4 space-y-4">
-      {error && (
-        <Alert type="error" message={error} />
-      )}
+      {error && <Alert type="error" message={error} />}
 
-      {/* ── SETUP PHASE ── */}
       {phase === 'setup' && (
         <>
           <div className="pt-2">
@@ -230,32 +250,35 @@ export default function DriverTripPage() {
               <Select
                 label="Sucursal de origen"
                 value={originBranchId}
-                onChange={e => setOriginBranchId(e.target.value)}
+                onChange={(e) => setOriginBranchId(e.target.value)}
                 placeholder="Seleccionar sucursal..."
-                options={branches.map(b => ({ value: b.id, label: b.name }))}
+                options={branches.map((b) => ({ value: b.id, label: b.name }))}
               />
+
               <Select
                 label="Vehículo"
                 value={vehicleId}
-                onChange={e => setVehicleId(e.target.value)}
+                onChange={(e) => setVehicleId(e.target.value)}
                 placeholder="Seleccionar vehículo disponible..."
-                options={vehicles.map(v => ({
+                options={vehicles.map((v) => ({
                   value: v.id,
                   label: `${v.plate} — ${v.brand} ${v.model}`,
                 }))}
                 hint={vehicles.length === 0 ? 'No hay vehículos disponibles' : undefined}
               />
+
               <Select
                 label="Destino"
                 value={destinationId}
-                onChange={e => setDestinationId(e.target.value)}
+                onChange={(e) => setDestinationId(e.target.value)}
                 placeholder="Seleccionar destino..."
-                options={locations.map(l => ({ value: l.id, label: l.name }))}
+                options={locations.map((l) => ({ value: l.id, label: l.name }))}
               />
+
               <Textarea
                 label="Comentario (opcional)"
                 value={tripComment}
-                onChange={e => setTripComment(e.target.value)}
+                onChange={(e) => setTripComment(e.target.value)}
                 placeholder="Motivo del viaje, instrucciones especiales..."
                 rows={2}
               />
@@ -279,50 +302,77 @@ export default function DriverTripPage() {
         </>
       )}
 
-      {/* ── ACTIVE TRIP PHASE ── */}
       {phase === 'active' && activeTrip && (
         <>
-          {/* Status header */}
           <div className="pt-2 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-white">Viaje activo</h2>
               <p className="text-slate-400 text-sm mt-0.5">
-                Iniciado {formatDistanceToNow(new Date(activeTrip.startedAt), { locale: es, addSuffix: true })}
+                Iniciado{' '}
+                {formatDistanceToNow(new Date(activeTrip.startedAt), {
+                  locale: es,
+                  addSuffix: true,
+                })}
               </p>
             </div>
             <StatusBadge status={activeTrip.status} />
           </div>
 
-          {/* Trip info card */}
           <Card>
             <div className="space-y-3">
-              <TripInfoRow icon={<Truck className="w-4 h-4 text-slate-400" />} label="Vehículo" value={
-                activeTrip.vehicle
-                  ? `${activeTrip.vehicle.plate} — ${activeTrip.vehicle.brand} ${activeTrip.vehicle.model}`
-                  : vehicleId
-              } />
-              <TripInfoRow icon={<Building2 className="w-4 h-4 text-slate-400" />} label="Origen" value={activeTrip.originBranch?.name || '—'} />
-              <TripInfoRow icon={<MapPin className="w-4 h-4 text-slate-400" />} label="Destino" value={activeTrip.destination?.name || '—'} />
-              <TripInfoRow icon={<Clock className="w-4 h-4 text-slate-400" />} label="Inicio" value={
-                format(new Date(activeTrip.startedAt), 'dd/MM/yyyy HH:mm', { locale: es })
-              } />
+              <TripInfoRow
+                icon={<Truck className="w-4 h-4 text-slate-400" />}
+                label="Vehículo"
+                value={
+                  activeTrip.vehicle
+                    ? `${activeTrip.vehicle.plate} — ${activeTrip.vehicle.brand} ${activeTrip.vehicle.model}`
+                    : vehicleId
+                }
+              />
+
+              <TripInfoRow
+                icon={<Building2 className="w-4 h-4 text-slate-400" />}
+                label="Origen"
+                value={activeTrip.originBranch?.name || '—'}
+              />
+
+              <TripInfoRow
+                icon={<MapPin className="w-4 h-4 text-slate-400" />}
+                label="Destino"
+                value={activeTrip.destination?.name || '—'}
+              />
+
+              <TripInfoRow
+                icon={<Clock className="w-4 h-4 text-slate-400" />}
+                label="Inicio"
+                value={format(new Date(activeTrip.startedAt), 'dd/MM/yyyy HH:mm', { locale: es })}
+              />
+
               {activeTrip.comment && (
-                <TripInfoRow icon={<ChevronRight className="w-4 h-4 text-slate-400" />} label="Nota" value={activeTrip.comment} />
+                <TripInfoRow
+                  icon={<ChevronRight className="w-4 h-4 text-slate-400" />}
+                  label="Nota"
+                  value={activeTrip.comment}
+                />
               )}
             </div>
           </Card>
 
-          {/* Status-specific alert */}
           {activeTrip.status === 'IN_STOP' && (
-            <Alert type="warning" message="Viaje en parada. Cuando estés listo, continúa la ruta." />
-          )}
-          {activeTrip.status === 'IN_INCIDENT' && (
-            <Alert type="error" message="Incidencia registrada. Resuelve el problema y continúa la ruta." />
+            <Alert
+              type="warning"
+              message="Viaje en parada. Cuando estés listo, continúa la ruta."
+            />
           )}
 
-          {/* Action buttons */}
+          {activeTrip.status === 'IN_INCIDENT' && (
+            <Alert
+              type="error"
+              message="Incidencia registrada. Resuelve el problema y continúa la ruta."
+            />
+          )}
+
           <div className="space-y-3">
-            {/* IN_TRANSIT: can stop or report incident */}
             {activeTrip.status === 'IN_TRANSIT' && (
               <>
                 <Button
@@ -335,6 +385,7 @@ export default function DriverTripPage() {
                 >
                   Registrar parada
                 </Button>
+
                 <Button
                   fullWidth
                   variant="warning"
@@ -347,7 +398,6 @@ export default function DriverTripPage() {
               </>
             )}
 
-            {/* IN_STOP or IN_INCIDENT: can resume */}
             {(activeTrip.status === 'IN_STOP' || activeTrip.status === 'IN_INCIDENT') && (
               <>
                 <Button
@@ -360,7 +410,8 @@ export default function DriverTripPage() {
                 >
                   Continuar ruta
                 </Button>
-                {activeTrip.status === 'IN_TRANSIT' || activeTrip.status === 'IN_INCIDENT' ? null : (
+
+                {activeTrip.status === 'IN_STOP' && (
                   <Button
                     fullWidth
                     variant="warning"
@@ -374,7 +425,6 @@ export default function DriverTripPage() {
               </>
             )}
 
-            {/* Always: finish trip */}
             <Button
               fullWidth
               variant="success"
@@ -388,16 +438,15 @@ export default function DriverTripPage() {
         </>
       )}
 
-      {/* ── MODALS ── */}
-
-      {/* Stop modal */}
       <Modal
         open={stopModal}
         onClose={() => setStopModal(false)}
         title="Registrar parada"
         footer={
           <div className="flex gap-3">
-            <Button variant="ghost" fullWidth onClick={() => setStopModal(false)}>Cancelar</Button>
+            <Button variant="ghost" fullWidth onClick={() => setStopModal(false)}>
+              Cancelar
+            </Button>
             <Button
               fullWidth
               variant="warning"
@@ -412,20 +461,21 @@ export default function DriverTripPage() {
         <Textarea
           label="Comentario (opcional)"
           value={stopComment}
-          onChange={e => setStopComment(e.target.value)}
+          onChange={(e) => setStopComment(e.target.value)}
           placeholder="¿Por qué haces esta parada?"
           rows={3}
         />
       </Modal>
 
-      {/* Incident modal */}
       <Modal
         open={incidentModal}
         onClose={() => setIncidentModal(false)}
         title="Reportar incidencia"
         footer={
           <div className="flex gap-3">
-            <Button variant="ghost" fullWidth onClick={() => setIncidentModal(false)}>Cancelar</Button>
+            <Button variant="ghost" fullWidth onClick={() => setIncidentModal(false)}>
+              Cancelar
+            </Button>
             <Button
               fullWidth
               variant="danger"
@@ -442,28 +492,33 @@ export default function DriverTripPage() {
           <Select
             label="Tipo de incidencia"
             value={incidentTypeId}
-            onChange={e => setIncidentTypeId(e.target.value)}
+            onChange={(e) => setIncidentTypeId(e.target.value)}
             placeholder="Seleccionar tipo..."
-            options={incidentTypes.map(t => ({ value: t.id, label: `${t.name} (${severityLabel(t.severity)})` }))}
+            options={incidentTypes.map((t) => ({
+              value: t.id,
+              label: `${t.name} (${severityLabel(t.severity)})`,
+            }))}
           />
+
           <Textarea
             label="Descripción *"
             value={incidentComment}
-            onChange={e => setIncidentComment(e.target.value)}
+            onChange={(e) => setIncidentComment(e.target.value)}
             placeholder="Describe detalladamente la incidencia..."
             rows={4}
           />
         </div>
       </Modal>
 
-      {/* Finish modal */}
       <Modal
         open={finishModal}
         onClose={() => setFinishModal(false)}
         title="Finalizar viaje"
         footer={
           <div className="flex gap-3">
-            <Button variant="ghost" fullWidth onClick={() => setFinishModal(false)}>Cancelar</Button>
+            <Button variant="ghost" fullWidth onClick={() => setFinishModal(false)}>
+              Cancelar
+            </Button>
             <Button
               fullWidth
               variant="success"
@@ -477,17 +532,19 @@ export default function DriverTripPage() {
       >
         <div className="space-y-4">
           <Alert type="info" message="Al finalizar el viaje se enviará notificación automática." />
+
           <Select
             label="Sucursal de llegada (opcional)"
             value={finishBranchId}
-            onChange={e => setFinishBranchId(e.target.value)}
+            onChange={(e) => setFinishBranchId(e.target.value)}
             placeholder="Seleccionar sucursal de llegada..."
-            options={branches.map(b => ({ value: b.id, label: b.name }))}
+            options={branches.map((b) => ({ value: b.id, label: b.name }))}
           />
+
           <Textarea
             label="Comentario final (opcional)"
             value={finishComment}
-            onChange={e => setFinishComment(e.target.value)}
+            onChange={(e) => setFinishComment(e.target.value)}
             placeholder="Observaciones del viaje..."
             rows={3}
           />
@@ -497,7 +554,15 @@ export default function DriverTripPage() {
   );
 }
 
-function TripInfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function TripInfoRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) {
   return (
     <div className="flex items-start gap-3">
       <span className="mt-0.5 shrink-0">{icon}</span>
@@ -510,6 +575,12 @@ function TripInfoRow({ icon, label, value }: { icon: React.ReactNode; label: str
 }
 
 function severityLabel(s: string) {
-  const map: Record<string, string> = { LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta', CRITICAL: 'Crítica' };
+  const map: Record<string, string> = {
+    LOW: 'Baja',
+    MEDIUM: 'Media',
+    HIGH: 'Alta',
+    CRITICAL: 'Crítica',
+  };
+
   return map[s] || s;
 }
