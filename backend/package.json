@@ -1,20 +1,28 @@
 {
   "name": "fleetops-backend",
   "version": "1.0.0",
+  "private": true,
   "description": "FleetOps Corporate Transport Management - Backend",
   "main": "dist/index.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "prisma generate && tsc",
     "start": "node dist/index.js",
+    "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio"
   },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
-    "@prisma/client": "^5.8.0",
+    "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.1",
@@ -34,7 +42,7 @@
     "@types/node": "^20.11.5",
     "@types/node-telegram-bot-api": "^0.64.6",
     "@types/uuid": "^9.0.7",
-    "prisma": "^5.8.0",
+    "prisma": "^5.22.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }
