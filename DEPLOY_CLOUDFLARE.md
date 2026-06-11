@@ -37,8 +37,10 @@ wrangler d1 create fleetops
 # 1.2 Generar el cliente Prisma
 npm run db:generate
 
-# 1.3 Generar la migración SQL del esquema (crea migrations/0001_init.sql)
-npm run db:diff
+# 1.3 Las migraciones ya están versionadas en worker/migrations/
+#     (0001_init.sql + 0002_appointments_routing.sql). No regeneres 0001.
+#     Para crear una migración nueva tras cambiar el schema, usa migrate diff
+#     contra la base remota/local y guarda el .sql incremental en migrations/.
 
 # 1.4 Aplicar migraciones a D1 (remoto)
 npm run db:migrate:remote
@@ -48,6 +50,10 @@ wrangler secret put JWT_SECRET        # cadena aleatoria de >= 32 caracteres
 wrangler secret put SEED_TOKEN        # token de un solo uso para sembrar datos
 wrangler secret put TELEGRAM_BOT_TOKEN   # (opcional)
 wrangler secret put TELEGRAM_CHAT_ID     # (opcional)
+
+# (Opcional) Optimización de rutas multi-parada con motor OSM gratuito.
+# Sin esto se usa una heurística nearest-neighbor integrada (sin red).
+# wrangler secret put OSRM_URL   # ej. https://router.project-osrm.org
 
 # 1.6 Ajusta CORS_ORIGIN en wrangler.toml con la URL final de Pages
 #     (puedes volver a este paso tras crear Pages y luego `wrangler deploy` de nuevo)
