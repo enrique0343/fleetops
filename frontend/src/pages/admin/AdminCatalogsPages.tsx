@@ -4,6 +4,7 @@ import { User, Vehicle, Branch, Location } from '../../types';
 import { Button, Input, Select, Card, Alert, Modal, Textarea, StatusBadge } from '../../components/ui';
 import { Plus, Pencil, ToggleLeft, ToggleRight, QrCode, Camera } from 'lucide-react';
 import { resizeImageToDataUrl } from '../../lib/image';
+import { AddressSearch } from '../../components/AddressSearch';
 import { format } from 'date-fns';
 const VehicleQrModal = lazy(() =>
   import('../../components/VehicleQrModal').then((m) => ({ default: m.VehicleQrModal }))
@@ -382,10 +383,14 @@ export function AdminLocationsPage() {
             onChange={e => setForm(p => ({ ...p, addressRef: e.target.value }))}
             placeholder="Dirección legible"
           />
-          <div className="flex gap-3">
-            <Input label="Latitud" type="number" step="any" value={form.lat} onChange={e => setForm(p => ({ ...p, lat: e.target.value }))} placeholder="0.000000" />
-            <Input label="Longitud" type="number" step="any" value={form.lng} onChange={e => setForm(p => ({ ...p, lng: e.target.value }))} placeholder="0.000000" />
-          </div>
+          <AddressSearch
+            label="Buscar en el mapa (fija coordenadas)"
+            placeholder="Ej. Hospital Central, Av. X…"
+            value={form.lat && form.lng ? { name: form.addressRef || 'Coordenadas fijadas', lat: Number(form.lat), lng: Number(form.lng) } : null}
+            onChange={(r) => setForm(p => r
+              ? { ...p, lat: String(r.lat), lng: String(r.lng), addressRef: p.addressRef || r.name }
+              : { ...p, lat: '', lng: '' })}
+          />
           {editLoc && (
             <div className="flex items-center gap-3">
               <input type="checkbox" id="locActive" checked={form.isActive} onChange={e => setForm(p => ({ ...p, isActive: e.target.checked }))} className="accent-blue-500" />

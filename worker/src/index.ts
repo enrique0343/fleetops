@@ -14,6 +14,7 @@ import requestsRoutes from './routes/requests';
 import schedulingRoutes from './routes/scheduling';
 import providersRoutes from './routes/providers';
 import routesRoutes from './routes/routes';
+import geoRoutes from './routes/geo';
 
 const app = new Hono<AppEnv>();
 
@@ -64,6 +65,7 @@ app.route('/api/requests', requestsRoutes);
 app.route('/api/scheduling', schedulingRoutes);
 app.route('/api/outsourcing', providersRoutes);
 app.route('/api/routes', routesRoutes);
+app.route('/api/geo', geoRoutes);
 
 // 404
 app.notFound((c) =>

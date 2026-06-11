@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import api, { getErrorMessage } from '../../services/api';
 import { TransportTask, RoutePlan, AvailableResources } from '../../types';
-import { Button, Select, Modal, Alert, Input, Textarea } from '../../components/ui';
+import { Button, Select, Modal, Alert, Textarea } from '../../components/ui';
+import { AddressSearch, type AddressResult } from '../../components/AddressSearch';
 import { Plus, Route as RouteIcon, MapPin, Navigation, Send, Trash2, Sparkles } from 'lucide-react';
 
 export default function AdminRoutesPage() {
@@ -199,21 +200,21 @@ export default function AdminRoutesPage() {
 
 function NewTaskModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [type, setType] = useState('DELIVERY');
-  const [addressText, setAddressText] = useState('');
-  const [lat, setLat] = useState('');
-  const [lng, setLng] = useState('');
+  const [address, setAddress] = useState<AddressResult | null>(null);
   const [notes, setNotes] = useState('');
   const [priority, setPriority] = useState('NORMAL');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   const submit = async () => {
-    if (!addressText.trim() && (!lat || !lng)) { setError('Indica dirección o coordenadas'); return; }
+    if (!address) { setError('Busca y selecciona la dirección de la tarea'); return; }
     setSubmitting(true);
     try {
       await api.post('/routes/tasks', {
-        type, addressText: addressText || undefined,
-        lat: lat ? Number(lat) : undefined, lng: lng ? Number(lng) : undefined,
+        type,
+        addressText: address.name,
+        lat: address.lat,
+        lng: address.lng,
         notes, priority, requesterName: 'Coordinación',
       });
       onDone();
@@ -235,12 +236,12 @@ function NewTaskModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
             { value: 'DROPOFF', label: 'Dejar' }, { value: 'PICKUP', label: 'Recoger' },
             { value: 'DELIVERY', label: 'Entregar' }, { value: 'VISIT', label: 'Visitar' },
           ]} />
-        <Input label="Dirección / referencia" value={addressText} onChange={(e) => setAddressText(e.target.value)}
-          placeholder="Ej. Ministerio de Salud, Av. X" />
-        <div className="grid grid-cols-2 gap-3">
-          <Input label="Latitud" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="14.60" />
-          <Input label="Longitud" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="-90.51" />
-        </div>
+        <AddressSearch
+          label="Dirección / lugar"
+          placeholder="Ej. Ministerio de Salud…"
+          value={address}
+          onChange={setAddress}
+        />
         <Select label="Prioridad" value={priority} onChange={(e) => setPriority(e.target.value)}
           options={[{ value: 'NORMAL', label: 'Normal' }, { value: 'HIGH', label: 'Alta' }]} />
         <Textarea label="Notas" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
