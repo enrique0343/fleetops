@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import api, { getErrorMessage } from '../../services/api';
 import { User, Vehicle, Branch, Location } from '../../types';
 import { Button, Input, Select, Card, Alert, Modal, Textarea, StatusBadge } from '../../components/ui';
-import { Plus, Pencil, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Pencil, ToggleLeft, ToggleRight, QrCode } from 'lucide-react';
 import { format } from 'date-fns';
+const VehicleQrModal = lazy(() =>
+  import('../../components/VehicleQrModal').then((m) => ({ default: m.VehicleQrModal }))
+);
 
 // ════════════════════════════════════════
 // USERS MANAGEMENT
@@ -397,6 +400,7 @@ export function AdminVehiclesPage() {
 
   const emptyForm = { plate: '', model: '', brand: '', year: '', vehicleType: '', branchId: '', fuelType: '', color: '', isActive: true, isAmbulance: false, hasStretcher: false, hasOxygen: false };
   const [form, setForm] = useState(emptyForm);
+  const [qrVehicle, setQrVehicle] = useState<Vehicle | null>(null);
 
   const load = async () => {
     const [vRes, bRes] = await Promise.all([api.get('/catalogs/vehicles'), api.get('/catalogs/branches')]);
@@ -447,7 +451,10 @@ export function AdminVehiclesPage() {
                 <p className="font-mono font-bold text-slate-100">{v.plate}</p>
                 <p className="text-slate-400 text-sm">{v.brand} {v.model} {v.year && `(${v.year})`}</p>
               </div>
-              <button onClick={() => openEdit(v)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-4 h-4" /></button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setQrVehicle(v)} className="text-slate-500 hover:text-emerald-400 transition-colors" title="Código QR"><QrCode className="w-4 h-4" /></button>
+                <button onClick={() => openEdit(v)} className="text-slate-500 hover:text-blue-400 transition-colors" title="Editar"><Pencil className="w-4 h-4" /></button>
+              </div>
             </div>
             <div className="mt-2 flex gap-2 flex-wrap">
               {v.isAmbulance && <span className="text-xs bg-red-900/40 text-red-300 px-2 py-0.5 rounded">🚑 Ambulancia</span>}
@@ -503,6 +510,11 @@ export function AdminVehiclesPage() {
           )}
         </div>
       </Modal>
+      {qrVehicle && (
+        <Suspense fallback={null}>
+          <VehicleQrModal open={!!qrVehicle} onClose={() => setQrVehicle(null)} vehicle={qrVehicle} />
+        </Suspense>
+      )}
     </div>
   );
 }

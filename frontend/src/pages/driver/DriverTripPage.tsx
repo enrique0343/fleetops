@@ -1,11 +1,17 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense, type ReactNode } from 'react';
 import { useAuth } from '../../store/AuthContext';
 import api, { getErrorMessage } from '../../services/api';
 import { Trip, Branch, Vehicle, Location, IncidentType } from '../../types';
 import { Button, Select, Alert, Card, Modal, Textarea } from '../../components/ui';
+import { parseVehicleQr } from '../../components/vehicleQr';
+
+// El escáner usa html5-qrcode (pesado): se carga solo al abrirlo.
+const QrScanner = lazy(() =>
+  import('../../components/QrScanner').then((m) => ({ default: m.QrScanner }))
+);
 import {
   Play, Square, MapPin, AlertTriangle, Navigation,
-  Truck, Building2, CheckCircle2, History, Timer,
+  Truck, Building2, CheckCircle2, History, Timer, ScanLine,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -70,6 +76,8 @@ export default function DriverTripPage() {
   // Setup form
   const [originBranchId, setOriginBranchId] = useState('');
   const [vehicleId, setVehicleId] = useState('');
+  const [scannedVehicle, setScannedVehicle] = useState<Vehicle | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
   const [destinationId, setDestinationId] = useState('');
   const [tripComment, setTripComment] = useState('');
   const [hasLastSetup, setHasLastSetup] = useState(false);
@@ -142,13 +150,30 @@ export default function DriverTripPage() {
       if (last.originBranchId && branches.some((b) => b.id === last.originBranchId)) {
         setOriginBranchId(last.originBranchId);
       }
-      if (last.vehicleId && vehicles.some((v) => v.id === last.vehicleId)) {
-        setVehicleId(last.vehicleId);
-      }
       if (last.destinationId && locations.some((l) => l.id === last.destinationId)) {
         setDestinationId(last.destinationId);
       }
+      // El vehículo NO se rellena del historial: debe escanearse cada vez para
+      // garantizar que la unidad seleccionada es la que el conductor tiene enfrente.
     } catch { /* setup previo corrupto: ignorar */ }
+  };
+
+  // Resultado del escaneo del QR del vehículo.
+  const handleVehicleScan = (text: string) => {
+    setScanOpen(false);
+    const parsed = parseVehicleQr(text);
+    if (!parsed) {
+      setError('Código QR no válido. Escanea el código del vehículo.');
+      return;
+    }
+    const vehicle = vehicles.find((v) => v.id === parsed.id);
+    if (!vehicle) {
+      setError(`El vehículo ${parsed.plate} no está disponible o no existe.`);
+      return;
+    }
+    setError('');
+    setVehicleId(vehicle.id);
+    setScannedVehicle(vehicle);
   };
 
   const getGeoLocation = (): Promise<{ lat?: number; lng?: number }> =>
@@ -264,6 +289,7 @@ export default function DriverTripPage() {
       setPhase('setup');
       setFinishModal(false);
       setVehicleId('');
+      setScannedVehicle(null);
       setDestinationId('');
       setTripComment('');
       setFinishBranchId('');
@@ -288,6 +314,18 @@ export default function DriverTripPage() {
 
   return (
     <div className="p-4 space-y-4">
+      {scanOpen && (
+        <Suspense fallback={null}>
+          <QrScanner
+            open={scanOpen}
+            onClose={() => setScanOpen(false)}
+            onScan={handleVehicleScan}
+            title="Escanear vehículo"
+            hint="Apunta la cámara al código QR del vehículo"
+          />
+        </Suspense>
+      )}
+
       {error && <Alert type="error" message={error} />}
 
       {phase === 'setup' && (
@@ -324,17 +362,37 @@ export default function DriverTripPage() {
                 options={branches.map((b) => ({ value: b.id, label: b.name }))}
               />
 
-              <Select
-                label="Vehículo"
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                placeholder="Seleccionar vehículo disponible..."
-                options={vehicles.map((v) => ({
-                  value: v.id,
-                  label: `${v.plate} — ${v.brand} ${v.model}`,
-                }))}
-                hint={vehicles.length === 0 ? 'No hay vehículos disponibles' : undefined}
-              />
+              {/* Vehículo por escaneo de QR (evita elegir la unidad equivocada) */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">Vehículo</label>
+                {scannedVehicle ? (
+                  <div className="flex items-center gap-3 bg-emerald-950/40 border border-emerald-800/50 rounded-xl px-4 py-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-white font-medium">
+                        {scannedVehicle.plate} — {scannedVehicle.brand} {scannedVehicle.model}
+                      </p>
+                      <p className="text-xs text-emerald-300/80">Vehículo verificado por escaneo</p>
+                    </div>
+                    <button
+                      onClick={() => { setScannedVehicle(null); setVehicleId(''); setScanOpen(true); }}
+                      className="text-xs text-slate-300 hover:text-white bg-slate-700/60 rounded-lg px-2.5 py-1.5"
+                    >
+                      Reescanear
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setError(''); setScanOpen(true); }}
+                    className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3.5 font-medium transition-colors active:scale-[0.98]"
+                  >
+                    <ScanLine className="w-5 h-5" /> Escanear vehículo
+                  </button>
+                )}
+                <p className="text-xs text-slate-500 mt-1.5">
+                  Escanea el código QR pegado en el vehículo para seleccionarlo.
+                </p>
+              </div>
 
               <Select
                 label="Destino"
