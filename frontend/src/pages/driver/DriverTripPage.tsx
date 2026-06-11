@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, lazy, Suspense, type ReactNode } from
 import { useAuth } from '../../store/AuthContext';
 import api, { getErrorMessage } from '../../services/api';
 import { Trip, Branch, Vehicle, Location, IncidentType } from '../../types';
-import { Button, Select, Alert, Card, Modal, Textarea } from '../../components/ui';
+import { Button, Select, Alert, Card, Modal, Textarea, Input } from '../../components/ui';
 import { parseVehicleQr } from '../../components/vehicleQr';
 
 // El escáner usa html5-qrcode (pesado): se carga solo al abrirlo.
@@ -77,7 +77,12 @@ export default function DriverTripPage() {
   const [originBranchId, setOriginBranchId] = useState('');
   const [vehicleId, setVehicleId] = useState('');
   const [scannedVehicle, setScannedVehicle] = useState<Vehicle | null>(null);
+  const [verifyMethod, setVerifyMethod] = useState<'scan' | 'manual' | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
+  // Respaldo manual (cuando la cámara falla): teclear placa + confirmar
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualPlate, setManualPlate] = useState('');
+  const [manualMatch, setManualMatch] = useState<Vehicle | null>(null);
   const [destinationId, setDestinationId] = useState('');
   const [tripComment, setTripComment] = useState('');
   const [hasLastSetup, setHasLastSetup] = useState(false);
@@ -174,6 +179,31 @@ export default function DriverTripPage() {
     setError('');
     setVehicleId(vehicle.id);
     setScannedVehicle(vehicle);
+    setVerifyMethod('scan');
+  };
+
+  // Placas normalizadas para comparar sin importar mayúsculas/guiones/espacios.
+  const normalizePlate = (p: string) => p.toUpperCase().replace(/[\s-]/g, '');
+
+  const handleManualLookup = (value: string) => {
+    setManualPlate(value);
+    const target = normalizePlate(value);
+    if (target.length < 3) {
+      setManualMatch(null);
+      return;
+    }
+    setManualMatch(vehicles.find((v) => normalizePlate(v.plate) === target) || null);
+  };
+
+  const confirmManualVehicle = () => {
+    if (!manualMatch) return;
+    setVehicleId(manualMatch.id);
+    setScannedVehicle(manualMatch);
+    setVerifyMethod('manual');
+    setManualOpen(false);
+    setManualPlate('');
+    setManualMatch(null);
+    setError('');
   };
 
   const getGeoLocation = (): Promise<{ lat?: number; lng?: number }> =>
@@ -198,11 +228,16 @@ export default function DriverTripPage() {
     setActionLoading('start');
     try {
       const geo = await getGeoLocation();
+      // Trazabilidad: dejar constancia si el vehículo se ingresó a mano
+      // (respaldo de cámara) en lugar de escanearse.
+      const manualNote = verifyMethod === 'manual' ? '[Vehículo ingresado manualmente — cámara no disponible]' : '';
+      const finalComment = [tripComment, manualNote].filter(Boolean).join(' ') || undefined;
+
       const res = await api.post('/trips/start', {
         vehicleId,
         originBranchId,
         destinationId,
-        comment: tripComment || undefined,
+        comment: finalComment,
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
@@ -290,6 +325,7 @@ export default function DriverTripPage() {
       setFinishModal(false);
       setVehicleId('');
       setScannedVehicle(null);
+      setVerifyMethod(null);
       setDestinationId('');
       setTripComment('');
       setFinishBranchId('');
@@ -325,6 +361,53 @@ export default function DriverTripPage() {
           />
         </Suspense>
       )}
+
+      {/* Respaldo manual: teclear placa + confirmación del vehículo */}
+      <Modal
+        open={manualOpen}
+        onClose={() => { setManualOpen(false); setManualPlate(''); setManualMatch(null); }}
+        title="Ingresar placa manualmente"
+        footer={
+          <div className="flex gap-3">
+            <Button variant="ghost" fullWidth onClick={() => { setManualOpen(false); setManualPlate(''); setManualMatch(null); }}>
+              Cancelar
+            </Button>
+            <Button fullWidth variant="warning" onClick={confirmManualVehicle} disabled={!manualMatch}>
+              Confirmar vehículo
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <Alert type="warning" message="Usa esta opción solo si la cámara no funciona. Quedará registrado que el vehículo se ingresó manualmente." />
+          <Input
+            label="Placa del vehículo"
+            value={manualPlate}
+            onChange={(e) => handleManualLookup(e.target.value)}
+            placeholder="Ej. ABC-123"
+            autoFocus
+            autoCapitalize="characters"
+          />
+          {manualPlate.trim().length >= 3 && (
+            manualMatch ? (
+              <div className="flex items-center gap-3 bg-slate-800 border border-slate-600 rounded-xl px-4 py-3">
+                <Truck className="w-5 h-5 text-blue-400 shrink-0" />
+                <div>
+                  <p className="text-sm text-white font-medium">
+                    {manualMatch.plate} — {manualMatch.brand} {manualMatch.model}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {manualMatch.color ? `${manualMatch.color} · ` : ''}{manualMatch.fuelType || ''}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">¿Es este el vehículo que tienes enfrente?</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-red-400">No hay ningún vehículo disponible con esa placa.</p>
+            )
+          )}
+        </div>
+      </Modal>
 
       {error && <Alert type="error" message={error} />}
 
@@ -366,28 +449,42 @@ export default function DriverTripPage() {
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1.5">Vehículo</label>
                 {scannedVehicle ? (
-                  <div className="flex items-center gap-3 bg-emerald-950/40 border border-emerald-800/50 rounded-xl px-4 py-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <div className={`flex items-center gap-3 rounded-xl px-4 py-3 border ${
+                    verifyMethod === 'scan'
+                      ? 'bg-emerald-950/40 border-emerald-800/50'
+                      : 'bg-amber-950/40 border-amber-800/50'
+                  }`}>
+                    <CheckCircle2 className={`w-5 h-5 shrink-0 ${verifyMethod === 'scan' ? 'text-emerald-400' : 'text-amber-400'}`} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-white font-medium">
                         {scannedVehicle.plate} — {scannedVehicle.brand} {scannedVehicle.model}
                       </p>
-                      <p className="text-xs text-emerald-300/80">Vehículo verificado por escaneo</p>
+                      <p className={`text-xs ${verifyMethod === 'scan' ? 'text-emerald-300/80' : 'text-amber-300/80'}`}>
+                        {verifyMethod === 'scan' ? 'Vehículo verificado por escaneo' : 'Ingresado manualmente — verifica que la placa coincida'}
+                      </p>
                     </div>
                     <button
-                      onClick={() => { setScannedVehicle(null); setVehicleId(''); setScanOpen(true); }}
+                      onClick={() => { setScannedVehicle(null); setVehicleId(''); setVerifyMethod(null); setScanOpen(true); }}
                       className="text-xs text-slate-300 hover:text-white bg-slate-700/60 rounded-lg px-2.5 py-1.5"
                     >
                       Reescanear
                     </button>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => { setError(''); setScanOpen(true); }}
-                    className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3.5 font-medium transition-colors active:scale-[0.98]"
-                  >
-                    <ScanLine className="w-5 h-5" /> Escanear vehículo
-                  </button>
+                  <>
+                    <button
+                      onClick={() => { setError(''); setScanOpen(true); }}
+                      className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3.5 font-medium transition-colors active:scale-[0.98]"
+                    >
+                      <ScanLine className="w-5 h-5" /> Escanear vehículo
+                    </button>
+                    <button
+                      onClick={() => { setError(''); setManualOpen(true); }}
+                      className="w-full text-center text-xs text-slate-400 hover:text-slate-200 underline underline-offset-2 mt-2 py-1"
+                    >
+                      ¿La cámara no funciona? Ingresar placa manualmente
+                    </button>
+                  </>
                 )}
                 <p className="text-xs text-slate-500 mt-1.5">
                   Escanea el código QR pegado en el vehículo para seleccionarlo.
