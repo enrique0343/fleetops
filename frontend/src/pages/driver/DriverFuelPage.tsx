@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import api, { getErrorMessage } from '../../services/api';
-import { Vehicle, FuelRecord } from '../../types';
+import { Vehicle, FuelRecord, Trip } from '../../types';
 import { Button, Input, Select, Textarea, Alert, Card } from '../../components/ui';
-import { Fuel, Plus, ChevronUp, RefreshCw } from 'lucide-react';
+import { Fuel, Plus, ChevronUp, RefreshCw, Truck, Navigation } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -16,11 +16,11 @@ const GASOLINERAS = [
 
 export default function DriverFuelPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
   const [myRecords, setMyRecords] = useState<FuelRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingVehicles, setLoadingVehicles] = useState(true);
-  const [debugInfo, setDebugInfo] = useState('');
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
@@ -38,21 +38,26 @@ export default function DriverFuelPage() {
 
   const loadVehicles = useCallback(async () => {
     setLoadingVehicles(true);
-    setDebugInfo('');
     try {
-      // Intentar sin filtro de disponibilidad
-      const res = await api.get('/catalogs/vehicles');
-      console.log('Vehicles response:', res.data);
-      const all = res.data.data || [];
-      setDebugInfo(`API devolvió ${all.length} vehículos en total`);
-      // Filtrar solo activos
-      const active = all.filter((v: Vehicle) => v.isActive !== false);
-      setVehicles(active);
-      console.log('Vehículos activos:', active.length);
+      // Cargamos en paralelo el catálogo de vehículos y el viaje activo del
+      // conductor. Si está en viaje, su vehículo ya está asignado a ese viaje,
+      // así que lo preseleccionamos automáticamente (no tiene sentido elegirlo
+      // a mano: el vehículo es el que conduce ahora mismo).
+      const [vRes, tRes] = await Promise.all([
+        api.get('/catalogs/vehicles'),
+        api.get('/trips/my/active').catch(() => ({ data: { data: null } })),
+      ]);
+      const all = (vRes.data.data || []).filter((v: Vehicle) => v.isActive !== false);
+      setVehicles(all);
+
+      const trip: Trip | null = tRes.data.data || null;
+      setActiveTrip(trip);
+      if (trip?.vehicle?.id) {
+        // Preseleccionar el vehículo del viaje en curso.
+        setVehicleId(trip.vehicle.id);
+      }
     } catch (err) {
-      const msg = getErrorMessage(err);
-      console.error('Error cargando vehículos:', msg);
-      setDebugInfo(`Error: ${msg}`);
+      console.error('Error cargando vehículos:', getErrorMessage(err));
     } finally {
       setLoadingVehicles(false);
     }
@@ -90,6 +95,9 @@ export default function DriverFuelPage() {
     try {
       await api.post('/fuel', {
         vehicleId,
+        // Si la carga ocurre durante un viaje activo, la vinculamos a él
+        // para tener la trazabilidad combustible ↔ viaje.
+        tripId: activeTrip && activeTrip.vehicle?.id === vehicleId ? activeTrip.id : undefined,
         stationName,
         fuelType,
         quantity: parseFloat(quantity),
@@ -135,13 +143,6 @@ export default function DriverFuelPage() {
         </div>
       </div>
 
-      {/* Debug info - temporal para diagnóstico */}
-      {debugInfo && (
-        <div className="bg-slate-800 border border-slate-600 rounded-lg p-2 text-xs text-slate-400 font-mono">
-          🔍 {debugInfo}
-        </div>
-      )}
-
       {success && <Alert type="success" message={success} />}
       {error && <Alert type="error" message={error} />}
 
@@ -157,6 +158,22 @@ export default function DriverFuelPage() {
               <div className="bg-slate-700 rounded-xl p-3 text-sm text-slate-400 text-center animate-pulse">
                 Cargando vehículos...
               </div>
+            ) : activeTrip?.vehicle ? (
+              // En viaje: el vehículo es el del viaje en curso. Se muestra fijo.
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">Vehículo</label>
+                <div className="flex items-center gap-3 bg-blue-950/40 border border-blue-800/50 rounded-xl px-4 py-3">
+                  <Truck className="w-5 h-5 text-blue-400 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-white font-medium">
+                      {activeTrip.vehicle.plate} — {activeTrip.vehicle.brand} {activeTrip.vehicle.model}
+                    </p>
+                    <p className="text-xs text-blue-300/80 flex items-center gap-1">
+                      <Navigation className="w-3 h-3" /> Vehículo de tu viaje en curso
+                    </p>
+                  </div>
+                </div>
+              </div>
             ) : vehicles.length === 0 ? (
               <div className="space-y-2">
                 <Alert type="warning" message="No se encontraron vehículos. Presiona el botón ↻ para intentar de nuevo." />
@@ -168,6 +185,7 @@ export default function DriverFuelPage() {
                 </button>
               </div>
             ) : (
+              // Sin viaje activo: selección manual (carga fuera de ruta).
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1.5">
                   Vehículo * <span className="text-slate-500 font-normal">({vehicles.length} disponibles)</span>
@@ -184,6 +202,9 @@ export default function DriverFuelPage() {
                     </option>
                   ))}
                 </select>
+                <p className="text-xs text-slate-500 mt-1.5">
+                  No tienes un viaje activo. Selecciona el vehículo de la carga.
+                </p>
               </div>
             )}
 
