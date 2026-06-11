@@ -6,7 +6,7 @@ import { StatusBadge } from '../../components/ui';
 import {
   Map, Activity, AlertTriangle, Send, Clock, Fuel, Truck,
   CheckCircle2, TrendingUp, Trophy, RefreshCw, ArrowRight, ShieldAlert,
-  CalendarClock, Ambulance, Inbox, UserX, Gauge,
+  CalendarClock, Ambulance, Inbox, UserX, Gauge, ScanLine,
 } from 'lucide-react';
 import { formatDistanceToNowStrict, format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -91,6 +91,17 @@ export default function AdminDashboard() {
             />
           )}
         </div>
+      )}
+
+      {/* Banner: viajes con vehículo ingresado sin escaneo (vigilar abuso del respaldo manual) */}
+      {(stats?.manualVehicleWeek || 0) > 0 && (
+        <AlertBanner
+          to="/admin/trips?manualVehicle=true"
+          icon={<ScanLine className="w-5 h-5" />}
+          tone="amber"
+          title={`${stats!.manualVehicleWeek} viaje(s) esta semana iniciados sin escanear el vehículo`}
+          action="Revisar"
+        />
       )}
 
       {/* Banner: solicitudes pendientes de aprobar */}

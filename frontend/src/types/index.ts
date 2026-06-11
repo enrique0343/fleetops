@@ -332,6 +332,7 @@ export interface DashboardStats {
   forcedWeek?: number;
   weekTrips?: number;
   weekIncidents?: number;
+  manualVehicleWeek?: number;
   fleet?: { total: number; inUse: number };
   trend7d?: { date: string; trips: number }[];
   topDrivers?: { name: string; trips: number }[];

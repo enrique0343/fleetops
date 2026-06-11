@@ -137,6 +137,7 @@ trips.get('/', authenticate, requireDispatcher, async (c) => {
     dateFrom: q.dateFrom,
     dateTo: q.dateTo,
     telegramFailed: q.telegramFailed === 'true',
+    manualVehicle: q.manualVehicle === 'true',
     page: parseInt(q.page || '') || 1,
     limit: parseInt(q.limit || '') || 20,
   });

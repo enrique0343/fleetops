@@ -284,6 +284,7 @@ export class TripService {
     dateFrom?: string;
     dateTo?: string;
     telegramFailed?: boolean;
+    manualVehicle?: boolean;
     page: number;
     limit: number;
   }) {
@@ -293,6 +294,9 @@ export class TripService {
     if (filters.driverId) where.driverId = filters.driverId;
     if (filters.vehicleId) where.vehicleId = filters.vehicleId;
     if (filters.telegramFailed) where.telegramDeliveryStatus = 'FAILED';
+    // Viajes donde el vehículo se ingresó a mano (respaldo del escaneo QR);
+    // la marca queda en el comentario al iniciar el viaje.
+    if (filters.manualVehicle) where.comment = { contains: 'Vehículo ingresado manualmente' };
     if (filters.dateFrom || filters.dateTo) {
       where.startedAt = {};
       if (filters.dateFrom) where.startedAt.gte = new Date(filters.dateFrom);
@@ -457,6 +461,7 @@ export class TripService {
       activeTrips,
       weekFuel,
       weekIncidents,
+      manualVehicleWeek,
     ] = await Promise.all([
       this.prisma.trip.count({ where: { startedAt: { gte: today } } }),
       this.prisma.trip.count({ where: { status: { in: ACTIVE_STATUSES } } }),
@@ -498,6 +503,12 @@ export class TripService {
       this.prisma.tripEvent.count({
         where: { type: 'REPORT_INCIDENT', serverTimestamp: { gte: weekAgo } },
       }),
+      this.prisma.trip.count({
+        where: {
+          startedAt: { gte: weekAgo },
+          comment: { contains: 'Vehículo ingresado manualmente' },
+        },
+      }),
     ]);
 
     // Bucket the week's trips per day (done in JS: D1/SQLite lacks date_trunc).
@@ -531,6 +542,7 @@ export class TripService {
       forcedWeek,
       weekTrips: weekTrips.length,
       weekIncidents,
+      manualVehicleWeek,
       fleet: { total: vehiclesTotal, inUse: vehiclesInUse },
       trend7d,
       topDrivers,

@@ -611,7 +611,8 @@ export function AdminAuditPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/audit?limit=50').then(res => setLogs(res.data.data || [])).finally(() => setLoading(false));
+    // El backend pagina: { success, data: { data: [...], total, ... } }
+    api.get('/audit?limit=50').then(res => setLogs(res.data.data?.data || [])).finally(() => setLoading(false));
   }, []);
 
   return (
