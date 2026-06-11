@@ -103,6 +103,32 @@ trips.post('/:tripId/incident', authenticate, async (c) => {
   return c.json({ success: true, data: trip });
 });
 
+// Ping de ubicación durante el viaje (rastreo en vivo). Solo el conductor
+// dueño del viaje activo puede reportar su posición. No genera eventos para
+// no inundar la bitácora; solo actualiza la última posición conocida.
+trips.post('/:tripId/ping', authenticate, async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const lat = Number(body.lat);
+  const lng = Number(body.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new AppError('Coordenadas inválidas');
+  }
+  const prisma = c.get('prisma');
+  const trip = await prisma.trip.findUnique({ where: { id: c.req.param('tripId') } });
+  if (!trip) throw new AppError('Viaje no encontrado', 404);
+  if (trip.driverId !== c.get('user').userId) {
+    throw new AppError('No eres el conductor de este viaje', 403);
+  }
+  if (!['IN_TRANSIT', 'IN_STOP', 'IN_INCIDENT'].includes(trip.status)) {
+    throw new AppError('El viaje no está activo', 400);
+  }
+  await prisma.trip.update({
+    where: { id: trip.id },
+    data: { lastLat: lat, lastLng: lng, lastPingAt: new Date() },
+  });
+  return c.json({ success: true });
+});
+
 trips.post('/:tripId/finish', authenticate, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const svc = new TripService(c.get('prisma'));

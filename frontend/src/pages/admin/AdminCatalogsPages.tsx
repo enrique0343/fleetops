@@ -2,7 +2,8 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import api, { getErrorMessage } from '../../services/api';
 import { User, Vehicle, Branch, Location } from '../../types';
 import { Button, Input, Select, Card, Alert, Modal, Textarea, StatusBadge } from '../../components/ui';
-import { Plus, Pencil, ToggleLeft, ToggleRight, QrCode } from 'lucide-react';
+import { Plus, Pencil, ToggleLeft, ToggleRight, QrCode, Camera } from 'lucide-react';
+import { resizeImageToDataUrl } from '../../lib/image';
 import { format } from 'date-fns';
 const VehicleQrModal = lazy(() =>
   import('../../components/VehicleQrModal').then((m) => ({ default: m.VehicleQrModal }))
@@ -131,7 +132,19 @@ export function AdminUsersPage() {
                 <tr><td colSpan={6} className="text-center py-8 text-slate-500">Cargando...</td></tr>
               ) : users.map(user => (
                 <tr key={user.id} className="hover:bg-slate-750 transition-colors">
-                  <td className="px-4 py-3 text-slate-200 font-medium">{user.fullName}</td>
+                  <td className="px-4 py-3 text-slate-200 font-medium">
+                    <span className="flex items-center gap-2.5">
+                      {user.photoUrl ? (
+                        <img src={user.photoUrl} alt={user.fullName}
+                          className="w-8 h-8 rounded-lg object-cover border border-slate-600 shrink-0" />
+                      ) : (
+                        <span className="w-8 h-8 rounded-lg bg-slate-700 text-slate-300 text-xs font-bold flex items-center justify-center shrink-0">
+                          {user.fullName?.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      {user.fullName}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-slate-400 hidden md:table-cell">{user.email}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-1 rounded ${user.role === 'ADMIN' ? 'bg-purple-900/40 text-purple-300' : 'bg-blue-900/40 text-blue-300'}`}>
@@ -398,9 +411,19 @@ export function AdminVehiclesPage() {
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const emptyForm = { plate: '', model: '', brand: '', year: '', vehicleType: '', branchId: '', fuelType: '', color: '', isActive: true, isAmbulance: false, hasStretcher: false, hasOxygen: false };
+  const emptyForm = { plate: '', model: '', brand: '', year: '', vehicleType: '', branchId: '', fuelType: '', color: '', isActive: true, isAmbulance: false, hasStretcher: false, hasOxygen: false, photoUrl: '' as string };
   const [form, setForm] = useState(emptyForm);
   const [qrVehicle, setQrVehicle] = useState<Vehicle | null>(null);
+
+  const handleVehiclePhoto = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 640, 0.8);
+      setForm(p => ({ ...p, photoUrl: dataUrl }));
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  };
 
   const load = async () => {
     const [vRes, bRes] = await Promise.all([api.get('/catalogs/vehicles'), api.get('/catalogs/branches')]);
@@ -413,7 +436,7 @@ export function AdminVehiclesPage() {
   const openCreate = () => { setEditVehicle(null); setForm(emptyForm); setShowModal(true); };
   const openEdit = (v: Vehicle) => {
     setEditVehicle(v);
-    setForm({ plate: v.plate, model: v.model, brand: v.brand, year: v.year?.toString() || '', vehicleType: v.vehicleType || '', branchId: v.branchId || '', fuelType: v.fuelType || '', color: v.color || '', isActive: v.isActive, isAmbulance: v.isAmbulance ?? false, hasStretcher: v.hasStretcher ?? false, hasOxygen: v.hasOxygen ?? false });
+    setForm({ plate: v.plate, model: v.model, brand: v.brand, year: v.year?.toString() || '', vehicleType: v.vehicleType || '', branchId: v.branchId || '', fuelType: v.fuelType || '', color: v.color || '', isActive: v.isActive, isAmbulance: v.isAmbulance ?? false, hasStretcher: v.hasStretcher ?? false, hasOxygen: v.hasOxygen ?? false, photoUrl: v.photoUrl || '' });
     setShowModal(true);
   };
 
@@ -446,6 +469,10 @@ export function AdminVehiclesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {vehicles.map(v => (
           <Card key={v.id} className={!v.isActive ? 'opacity-50' : ''}>
+            {v.photoUrl && (
+              <img src={v.photoUrl} alt={v.plate}
+                className="w-full h-32 object-cover rounded-xl mb-3 border border-slate-700" />
+            )}
             <div className="flex justify-between">
               <div>
                 <p className="font-mono font-bold text-slate-100">{v.plate}</p>
@@ -483,6 +510,20 @@ export function AdminVehiclesPage() {
           </div>
           <Select label="Tipo de combustible" value={form.fuelType} onChange={e => setForm(p => ({ ...p, fuelType: e.target.value }))} placeholder="Seleccionar..." options={[{ value: 'Gasolina', label: 'Gasolina' }, { value: 'Diesel', label: 'Diesel' }, { value: 'Gas LP', label: 'Gas LP' }]} />
           <Select label="Sucursal" value={form.branchId} onChange={e => setForm(p => ({ ...p, branchId: e.target.value }))} placeholder="Sin sucursal" options={branches.map(b => ({ value: b.id, label: b.name }))} />
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Foto del vehículo</label>
+            <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-slate-700 bg-slate-800/50 p-3 hover:border-slate-500 transition-colors">
+              {form.photoUrl ? (
+                <img src={form.photoUrl} alt="Foto" className="w-16 h-16 object-cover rounded-lg border border-slate-600" />
+              ) : (
+                <span className="w-16 h-16 rounded-lg bg-slate-700 flex items-center justify-center">
+                  <Camera className="w-5 h-5 text-slate-400" />
+                </span>
+              )}
+              <span className="text-sm text-slate-300">{form.photoUrl ? 'Cambiar foto' : 'Subir foto de la unidad'}</span>
+              <input type="file" accept="image/*" className="hidden" onChange={e => handleVehiclePhoto(e.target.files?.[0])} />
+            </label>
+          </div>
           <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-3 space-y-2">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Capacidades de ambulancia</p>
             <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">

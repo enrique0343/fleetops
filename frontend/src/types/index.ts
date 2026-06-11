@@ -38,6 +38,7 @@ export interface User {
   fullName: string;
   role: UserRole;
   phone?: string;
+  photoUrl?: string | null;
   isActive: boolean;
   branch?: Branch;
   branchId?: string;
@@ -83,6 +84,7 @@ export interface Vehicle {
   isAmbulance?: boolean;
   hasStretcher?: boolean;
   hasOxygen?: boolean;
+  photoUrl?: string | null;
 }
 
 export interface IncidentType {
@@ -122,6 +124,13 @@ export interface Trip {
   startedAt: string;
   finishedAt?: string;
   durationMinutes?: number;
+  startLat?: number | null;
+  startLng?: number | null;
+  endLat?: number | null;
+  endLng?: number | null;
+  lastLat?: number | null;
+  lastLng?: number | null;
+  lastPingAt?: string | null;
   comment?: string;
   correctionFlag: boolean;
   forcedCloseFlag: boolean;

@@ -7,6 +7,15 @@ import { requireFields, isEmail, normalizeEmail } from '../lib/validate';
 
 const catalogs = new Hono<AppEnv>();
 
+// Fotos como data URL JPEG reducidas en el cliente; límite defensivo de tamaño.
+function validPhoto(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value !== 'string' || value.length > 300_000) {
+    throw new AppError('La foto es demasiado grande');
+  }
+  return value;
+}
+
 // ─── BRANCHES ───
 catalogs.get('/branches', authenticate, async (c) => {
   const branches = await c.get('prisma').branch.findMany({
@@ -63,6 +72,7 @@ catalogs.post('/vehicles', authenticate, requireAdmin, async (c) => {
       isAmbulance: body.isAmbulance ?? false,
       hasStretcher: body.hasStretcher ?? false,
       hasOxygen: body.hasOxygen ?? false,
+      photoUrl: validPhoto(body.photoUrl),
     },
   });
   return c.json({ success: true, data: vehicle }, 201);
@@ -86,6 +96,7 @@ catalogs.patch('/vehicles/:id', authenticate, requireAdmin, async (c) => {
       isAmbulance: body.isAmbulance,
       hasStretcher: body.hasStretcher,
       hasOxygen: body.hasOxygen,
+      photoUrl: body.photoUrl !== undefined ? validPhoto(body.photoUrl) : undefined,
     },
   });
   return c.json({ success: true, data: vehicle });
@@ -172,6 +183,7 @@ catalogs.get('/users', authenticate, requireAdmin, async (c) => {
       fullName: true,
       role: true,
       phone: true,
+      photoUrl: true,
       isActive: true,
       branchId: true,
       branch: true,

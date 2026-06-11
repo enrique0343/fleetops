@@ -107,9 +107,30 @@ auth.get('/me', authenticate, async (c) => {
       fullName: user.fullName,
       role: user.role,
       phone: user.phone,
+      photoUrl: user.photoUrl,
       branchId: user.branchId,
       branch: user.branch,
     },
+  });
+});
+
+// PATCH /api/auth/me/profile — el usuario actualiza su propio perfil (foto, teléfono)
+auth.patch('/me/profile', authenticate, async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  // La foto viaja como data URL JPEG ya reducida en el cliente; límite defensivo.
+  if (body.photoUrl && (typeof body.photoUrl !== 'string' || body.photoUrl.length > 300_000)) {
+    throw new AppError('La foto es demasiado grande');
+  }
+  const user = await c.get('prisma').user.update({
+    where: { id: c.get('user').userId },
+    data: {
+      photoUrl: body.photoUrl !== undefined ? body.photoUrl || null : undefined,
+      phone: body.phone !== undefined ? body.phone || null : undefined,
+    },
+  });
+  return c.json({
+    success: true,
+    data: { id: user.id, photoUrl: user.photoUrl, phone: user.phone },
   });
 });
 

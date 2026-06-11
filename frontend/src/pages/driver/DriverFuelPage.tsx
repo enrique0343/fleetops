@@ -63,6 +63,15 @@ export default function DriverFuelPage() {
     }
   }, []);
 
+  // El tipo de combustible viene de la configuración del vehículo: al resolver
+  // el vehículo (viaje activo o selección manual) se fija automáticamente.
+  const selectedVehicle =
+    (activeTrip?.vehicle as Vehicle | undefined) || vehicles.find((v) => v.id === vehicleId) || null;
+
+  useEffect(() => {
+    if (selectedVehicle?.fuelType) setFuelType(selectedVehicle.fuelType);
+  }, [selectedVehicle?.id, selectedVehicle?.fuelType]);
+
   const loadRecords = useCallback(async () => {
     try {
       const res = await api.get('/fuel', { params: { limit: 20 } });
@@ -231,17 +240,26 @@ export default function DriverFuelPage() {
 
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">Tipo de combustible *</label>
-              <select
-                value={fuelType}
-                onChange={e => setFuelType(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-xl px-4 py-3 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Seleccionar...</option>
-                <option value="Gasolina Regular">Gasolina Regular</option>
-                <option value="Gasolina Premium">Gasolina Premium</option>
-                <option value="Diesel">Diesel</option>
-                <option value="Gas LP">Gas LP</option>
-              </select>
+              {selectedVehicle?.fuelType ? (
+                // Definido por la configuración del vehículo: no se elige a mano.
+                <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3">
+                  <Fuel className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span className="text-sm text-white font-medium">{selectedVehicle.fuelType}</span>
+                  <span className="text-xs text-slate-500 ml-auto">según el vehículo</span>
+                </div>
+              ) : (
+                <select
+                  value={fuelType}
+                  onChange={e => setFuelType(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-xl px-4 py-3 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Seleccionar...</option>
+                  <option value="Gasolina Regular">Gasolina Regular</option>
+                  <option value="Gasolina Premium">Gasolina Premium</option>
+                  <option value="Diesel">Diesel</option>
+                  <option value="Gas LP">Gas LP</option>
+                </select>
+              )}
             </div>
 
             <Input
