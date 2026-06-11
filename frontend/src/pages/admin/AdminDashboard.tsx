@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
-import { DashboardStats } from '../../types';
+import { DashboardStats, RequestStats } from '../../types';
 import { StatusBadge } from '../../components/ui';
 import {
   Map, Activity, AlertTriangle, Send, Clock, Fuel, Truck,
   CheckCircle2, TrendingUp, Trophy, RefreshCw, ArrowRight, ShieldAlert,
+  CalendarClock, Ambulance, Inbox, UserX, Gauge,
 } from 'lucide-react';
 import { formatDistanceToNowStrict, format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -14,14 +15,19 @@ const REFRESH_MS = 30_000;
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [reqStats, setReqStats] = useState<RequestStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await api.get('/trips/admin/dashboard');
-      setStats(res.data.data);
+      const [dash, reqs] = await Promise.all([
+        api.get('/trips/admin/dashboard'),
+        api.get('/requests/admin/stats').catch(() => null),
+      ]);
+      setStats(dash.data.data);
+      if (reqs) setReqStats(reqs.data.data);
       setUpdatedAt(new Date());
     } finally {
       setLoading(false);
@@ -87,6 +93,17 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* Banner: solicitudes pendientes de aprobar */}
+      {(reqStats?.pending || 0) > 0 && (
+        <AlertBanner
+          to="/admin/requests?status=PENDING"
+          icon={<Inbox className="w-5 h-5" />}
+          tone="amber"
+          title={`${reqStats!.pending} solicitud(es) pendiente(s) de aprobación`}
+          action="Revisar agenda"
+        />
+      )}
+
       {/* KPIs principales */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard icon={Map} label="Viajes hoy" value={stats?.totalToday ?? '—'} accent="blue"
@@ -96,6 +113,28 @@ export default function AdminDashboard() {
         <KpiCard icon={Fuel} label="Cargas hoy" value={stats?.fuelRecordsToday ?? '—'} accent="purple"
           sub={stats?.fuelWeek ? `$${stats.fuelWeek.amount.toLocaleString()} esta semana` : undefined} />
       </div>
+
+      {/* Agenda y solicitudes */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+            <CalendarClock className="w-4 h-4" /> Agenda y solicitudes
+          </h2>
+          <Link to="/admin/requests" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+            Gestionar <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <KpiCard icon={Inbox} label="Pendientes" value={reqStats?.pending ?? '—'} accent={(reqStats?.pending || 0) > 0 ? 'amber' : 'slate'} />
+          <KpiCard icon={CalendarClock} label="Programadas" value={reqStats?.scheduledToday ?? '—'} accent="blue" />
+          <KpiCard icon={Ambulance} label="Ambulancia activa" value={reqStats?.ambulanceActive ?? '—'} accent="red" pulse={(reqStats?.ambulanceActive || 0) > 0} />
+          <KpiCard icon={UserX} label="No-shows (sem.)" value={reqStats?.noShowWeek ?? '—'} accent="slate" />
+          <KpiCard icon={Gauge} label="SLA ambulancia"
+            value={reqStats?.slaCompliance != null ? `${reqStats.slaCompliance}%` : '—'}
+            accent={reqStats?.slaCompliance != null && reqStats.slaCompliance < 80 ? 'red' : 'emerald'}
+            sub="cumplimiento semanal" />
+        </div>
+      </section>
 
       {/* Fila ejecutiva: tendencia + flota */}
       <div className="grid lg:grid-cols-3 gap-4">
