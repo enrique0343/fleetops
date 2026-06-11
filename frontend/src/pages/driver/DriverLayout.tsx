@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../store/AuthContext';
-import { Map, Fuel, ClipboardList, LogOut, User } from 'lucide-react';
+import { Map, Fuel, ClipboardList, LogOut, User, CalendarClock } from 'lucide-react';
 
 export default function DriverLayout() {
   const { user, logout } = useAuth();
@@ -42,6 +42,7 @@ export default function DriverLayout() {
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800 px-4 pb-safe">
         <div className="flex items-center justify-around py-2">
           <NavItem to="/driver" icon={<Map className="w-5 h-5" />} label="Viaje" end />
+          <NavItem to="/driver/appointments" icon={<CalendarClock className="w-5 h-5" />} label="Citas" />
           <NavItem to="/driver/fuel" icon={<Fuel className="w-5 h-5" />} label="Combustible" />
           <NavItem to="/driver/history" icon={<ClipboardList className="w-5 h-5" />} label="Historial" />
           <NavItem to="/driver/profile" icon={<User className="w-5 h-5" />} label="Perfil" />

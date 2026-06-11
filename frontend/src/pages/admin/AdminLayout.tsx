@@ -2,13 +2,14 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../store/AuthContext';
 import {
   LayoutDashboard, Map, Fuel, Users, Building2, Truck,
-  MapPin, LogOut, Menu, Shield, CalendarClock, Route as RouteIcon
+  MapPin, LogOut, Menu, Shield, CalendarClock, Route as RouteIcon, CalendarDays
 } from 'lucide-react';
 import { useState } from 'react';
 
 const navItems = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/admin/requests', label: 'Solicitudes', icon: CalendarClock },
+  { to: '/admin/calendar', label: 'Agenda', icon: CalendarDays },
   { to: '/admin/routes', label: 'Rutas', icon: RouteIcon },
   { to: '/admin/trips', label: 'Viajes', icon: Map },
   { to: '/admin/fuel', label: 'Combustible', icon: Fuel },

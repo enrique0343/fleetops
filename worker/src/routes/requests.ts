@@ -79,6 +79,30 @@ requests.get('/my', authenticate, async (c) => {
   return c.json({ success: true, data: result });
 });
 
+// ─── Driver: my assigned appointments (today by default) ───
+requests.get('/my/assigned', authenticate, async (c) => {
+  const q = c.req.query();
+  const svc = new RequestService(c.get('prisma'));
+  const result = await svc.list({
+    assignedDriverId: c.get('user').userId,
+    statusIn: q.statusIn ? q.statusIn.split(',') : ['SCHEDULED', 'DISPATCHED'],
+    dateFrom: q.dateFrom,
+    dateTo: q.dateTo,
+    page: 1,
+    limit: 50,
+  });
+  return c.json({ success: true, data: result });
+});
+
+// ─── Dispatcher: calendar feed for a date range ───
+requests.get('/calendar', authenticate, requireDispatcher, async (c) => {
+  const q = c.req.query();
+  const from = q.from ? new Date(q.from) : new Date();
+  const to = q.to ? new Date(q.to) : new Date(from.getTime() + 7 * 86400000);
+  const svc = new RequestService(c.get('prisma'));
+  return c.json({ success: true, data: await svc.calendar(from, to) });
+});
+
 // ─── Admin/Dispatcher: list with filters ───
 requests.get('/', authenticate, requireDispatcher, async (c) => {
   const q = c.req.query();
@@ -105,10 +129,11 @@ requests.get('/:id', authenticate, async (c) => {
   const svc = new RequestService(c.get('prisma'));
   const req = await svc.getDetail(c.req.param('id'));
   const user = c.get('user');
-  // Requesters can only see their own; staff can see all.
+  // Requesters see their own; the assigned driver sees theirs; staff see all.
   if (
     !['ADMIN', 'DISPATCHER'].includes(user.role) &&
-    req.requesterId !== user.userId
+    req.requesterId !== user.userId &&
+    req.assignedDriverId !== user.userId
   ) {
     throw new AppError('No tienes permiso para ver esta solicitud', 403);
   }
@@ -120,6 +145,13 @@ requests.post('/:id/cancel', authenticate, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const svc = new RequestService(c.get('prisma'));
   const data = await svc.cancel(c.req.param('id'), c.get('user').userId, body.reason);
+  return c.json({ success: true, data });
+});
+
+// Driver starts their own assigned appointment (generates the Trip).
+requests.post('/:id/start', authenticate, async (c) => {
+  const svc = new RequestService(c.get('prisma'));
+  const data = await svc.startByDriver(c.req.param('id'), c.get('user').userId);
   return c.json({ success: true, data });
 });
 

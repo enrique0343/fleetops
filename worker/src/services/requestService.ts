@@ -114,9 +114,11 @@ export class RequestService {
 
   async list(filters: {
     status?: string;
+    statusIn?: string[];
     serviceType?: string;
     priority?: string;
     requesterId?: string;
+    assignedDriverId?: string;
     dateFrom?: string;
     dateTo?: string;
     page: number;
@@ -124,9 +126,11 @@ export class RequestService {
   }) {
     const where: any = {};
     if (filters.status) where.status = filters.status;
+    if (filters.statusIn) where.status = { in: filters.statusIn };
     if (filters.serviceType) where.serviceType = filters.serviceType;
     if (filters.priority) where.priority = filters.priority;
     if (filters.requesterId) where.requesterId = filters.requesterId;
+    if (filters.assignedDriverId) where.assignedDriverId = filters.assignedDriverId;
     if (filters.dateFrom || filters.dateTo) {
       where.scheduledAt = {};
       if (filters.dateFrom) where.scheduledAt.gte = new Date(filters.dateFrom);
@@ -150,6 +154,53 @@ export class RequestService {
     ]);
 
     return { data, total, page: filters.page, limit: filters.limit, totalPages: Math.ceil(total / filters.limit) };
+  }
+
+  // Calendar feed for the dispatcher: all requests in a date range, plus
+  // resource schedule blocks, with a light payload suited to a grid view.
+  async calendar(from: Date, to: Date) {
+    const [requests, blocks] = await Promise.all([
+      this.prisma.transportRequest.findMany({
+        where: {
+          scheduledAt: { gte: from, lte: to },
+          status: { notIn: ['CANCELLED', 'REJECTED'] },
+        },
+        select: {
+          id: true,
+          code: true,
+          serviceType: true,
+          priority: true,
+          status: true,
+          scheduledAt: true,
+          estimatedMinutes: true,
+          origin: { select: { name: true } },
+          destination: { select: { name: true } },
+          assignedVehicle: { select: { plate: true } },
+          assignedDriver: { select: { fullName: true } },
+        },
+        orderBy: { scheduledAt: 'asc' },
+      }),
+      this.prisma.scheduleBlock.findMany({
+        where: { endAt: { gte: from }, startAt: { lte: to } },
+        include: { vehicle: { select: { plate: true } }, driver: { select: { fullName: true } } },
+        orderBy: { startAt: 'asc' },
+      }),
+    ]);
+    return { requests, blocks };
+  }
+
+  // Driver starts an assigned appointment themselves (self-dispatch from the
+  // driver app). Equivalent to dispatch() but the driver must own the request.
+  async startByDriver(id: string, driverId: string) {
+    const req = await this.prisma.transportRequest.findUnique({ where: { id } });
+    if (!req) throw new AppError('Solicitud no encontrada', 404);
+    if (req.assignedDriverId !== driverId) {
+      throw new AppError('Esta cita no está asignada a ti', 403);
+    }
+    if (req.status !== 'SCHEDULED') {
+      throw new AppError('Solo puedes iniciar citas programadas', 400);
+    }
+    return this.dispatch(id, driverId);
   }
 
   private async transition(

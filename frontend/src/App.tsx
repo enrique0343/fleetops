@@ -9,6 +9,7 @@ import LoginPage from './pages/auth/LoginPage';
 import DriverLayout from './pages/driver/DriverLayout';
 import DriverTripPage from './pages/driver/DriverTripPage';
 import DriverFuelPage from './pages/driver/DriverFuelPage';
+import DriverAppointmentsPage from './pages/driver/DriverAppointmentsPage';
 import { DriverHistoryPage, DriverProfilePage } from './pages/driver/DriverOtherPages';
 
 // Requester
@@ -24,6 +25,7 @@ import AdminTripDetailPage from './pages/admin/AdminTripDetailPage';
 import AdminFuelPage from './pages/admin/AdminFuelPage';
 import AdminRequestsPage from './pages/admin/AdminRequestsPage';
 import AdminRoutesPage from './pages/admin/AdminRoutesPage';
+import AdminCalendarPage from './pages/admin/AdminCalendarPage';
 import {
   AdminUsersPage,
   AdminLocationsPage,
@@ -43,6 +45,7 @@ export default function App() {
           {/* Driver Routes */}
           <Route path="/driver" element={<ProtectedRoute><DriverLayout /></ProtectedRoute>}>
             <Route index element={<DriverTripPage />} />
+            <Route path="appointments" element={<DriverAppointmentsPage />} />
             <Route path="fuel" element={<DriverFuelPage />} />
             <Route path="history" element={<DriverHistoryPage />} />
             <Route path="profile" element={<DriverProfilePage />} />
@@ -58,6 +61,7 @@ export default function App() {
           <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminLayout /></ProtectedRoute>}>
             <Route index element={<AdminDashboard />} />
             <Route path="requests" element={<AdminRequestsPage />} />
+            <Route path="calendar" element={<AdminCalendarPage />} />
             <Route path="routes" element={<AdminRoutesPage />} />
             <Route path="trips" element={<AdminTripsPage />} />
             <Route path="trips/:tripId" element={<AdminTripDetailPage />} />
