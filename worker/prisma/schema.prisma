@@ -25,8 +25,9 @@ model User {
   email        String   @unique
   passwordHash String   @map("password_hash")
   fullName     String   @map("full_name")
-  role         String   @default("DRIVER") // DRIVER | ADMIN
+  role         String   @default("DRIVER") // DRIVER | ADMIN | REQUESTER | DISPATCHER
   phone        String?
+  department   String?
   isActive     Boolean  @default(true) @map("is_active")
   branchId     String?  @map("branch_id")
   createdAt    DateTime @default(now()) @map("created_at")
@@ -34,11 +35,17 @@ model User {
 
   branch Branch? @relation(fields: [branchId], references: [id])
 
-  tripsAsDriver  Trip[]          @relation("DriverTrips")
-  tripEvents     TripEvent[]
-  fuelRecords    FuelRecord[]
-  auditLogs      AuditLog[]
-  passwordResets PasswordReset[]
+  tripsAsDriver     Trip[]             @relation("DriverTrips")
+  tripEvents        TripEvent[]
+  fuelRecords       FuelRecord[]
+  auditLogs         AuditLog[]
+  passwordResets    PasswordReset[]
+  requestsMade      TransportRequest[] @relation("RequesterRequests")
+  requestsAssigned  TransportRequest[] @relation("AssignedDriverRequests")
+  requestsApproved  TransportRequest[] @relation("ApproverRequests")
+  requestEvents     RequestEvent[]
+  scheduleBlocks    ScheduleBlock[]
+  routePlans        RoutePlan[]
 
   @@map("users")
 }
@@ -69,12 +76,13 @@ model Branch {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users        User[]
-  vehicles     Vehicle[]
-  locations    Location[]
-  tripsOrigin  Trip[]       @relation("OriginBranch")
-  tripsClosure Trip[]       @relation("ClosureBranch")
-  fuelRecords  FuelRecord[]
+  users          User[]
+  vehicles       Vehicle[]
+  locations      Location[]
+  tripsOrigin    Trip[]          @relation("OriginBranch")
+  tripsClosure   Trip[]          @relation("ClosureBranch")
+  fuelRecords    FuelRecord[]
+  serviceWindows ServiceWindow[]
 
   @@map("branches")
 }
@@ -92,8 +100,11 @@ model Location {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  branch Branch? @relation(fields: [branchId], references: [id])
-  trips  Trip[]  @relation("TripDestination")
+  branch           Branch? @relation(fields: [branchId], references: [id])
+  trips            Trip[]  @relation("TripDestination")
+  requestsOrigin   TransportRequest[] @relation("RequestOrigin")
+  requestsDest     TransportRequest[] @relation("RequestDestination")
+  tasks            TransportTask[]
 
   @@map("locations")
 }
@@ -105,17 +116,27 @@ model Vehicle {
   brand         String
   year          Int?
   vehicleType   String?  @map("vehicle_type")
+  serviceClass  String   @default("ADMIN") @map("service_class") // ADMIN | AMBULANCE | CARGO
   branchId      String?  @map("branch_id")
   fuelType      String?  @map("fuel_type")
   color         String?
   isActive      Boolean  @default(true) @map("is_active")
   currentTripId String?  @unique @map("current_trip_id")
+
+  // Ambulance capabilities
+  isAmbulance   Boolean  @default(false) @map("is_ambulance")
+  hasStretcher  Boolean  @default(false) @map("has_stretcher")
+  hasOxygen     Boolean  @default(false) @map("has_oxygen")
+
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  branch      Branch?      @relation(fields: [branchId], references: [id])
-  trips       Trip[]
-  fuelRecords FuelRecord[]
+  branch        Branch?            @relation(fields: [branchId], references: [id])
+  trips         Trip[]
+  fuelRecords   FuelRecord[]
+  requests      TransportRequest[]
+  scheduleBlocks ScheduleBlock[]
+  routePlans    RoutePlan[]
 
   @@map("vehicles")
 }
@@ -163,6 +184,10 @@ model Trip {
   telegramLastAttemptAt  DateTime? @map("telegram_last_attempt_at")
   telegramLastResult     String?   @map("telegram_last_result")
 
+  // Planning links (optional — null = ad-hoc trip)
+  requestId String? @unique @map("request_id") // originating TransportRequest
+  priority  String  @default("NORMAL")         // NORMAL | URGENT | EMERGENCY
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -173,6 +198,9 @@ model Trip {
   closureBranch Branch?      @relation("ClosureBranch", fields: [closureBranchId], references: [id])
   events        TripEvent[]
   fuelRecords   FuelRecord[]
+  request       TransportRequest? @relation(fields: [requestId], references: [id])
+  routePlan     RoutePlan?
+  tasks         TransportTask[]
 
   @@map("trips")
 }
@@ -251,4 +279,217 @@ model AuditLog {
   admin User @relation(fields: [adminId], references: [id])
 
   @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────
+// TRANSPORT REQUESTS (Appointments)
+// ─────────────────────────────────────────────
+
+model TransportRequest {
+  id          String @id @default(uuid())
+  code        String @unique
+  serviceType String @default("STANDARD") // STANDARD | AMBULANCE
+  priority    String @default("SCHEDULED") // SCHEDULED | URGENT | EMERGENCY
+  status      String @default("PENDING") // PENDING | APPROVED | REJECTED | SCHEDULED | RESCHEDULED | DISPATCHED | COMPLETED | CANCELLED | NO_SHOW
+
+  // Requester
+  requesterId    String? @map("requester_id")
+  requesterName  String  @map("requester_name")
+  requesterPhone String? @map("requester_phone")
+  requesterDept  String? @map("requester_dept")
+
+  // Route & schedule
+  originId         String  @map("origin_id")
+  destinationId    String  @map("destination_id")
+  scheduledAt      DateTime @map("scheduled_at")
+  windowMinutes    Int      @default(30) @map("window_minutes")
+  estimatedMinutes Int?     @map("estimated_minutes")
+
+  // Standard payload
+  passengerCount Int?    @map("passenger_count")
+  reason         String?
+
+  // Ambulance / clinical block (optional)
+  patientName       String?  @map("patient_name")
+  patientCondition  String?  @map("patient_condition")
+  requiresStretcher Boolean  @default(false) @map("requires_stretcher")
+  requiresOxygen    Boolean  @default(false) @map("requires_oxygen")
+  clinicalNotes     String?  @map("clinical_notes")
+
+  // Assignment
+  assignedVehicleId String?   @map("assigned_vehicle_id")
+  assignedDriverId  String?   @map("assigned_driver_id")
+  approvedById      String?   @map("approved_by_id")
+  approvedAt        DateTime? @map("approved_at")
+  rejectionReason   String?   @map("rejection_reason")
+
+  // Execution
+  tripId       String?   @unique @map("trip_id")
+  dispatchedAt DateTime? @map("dispatched_at")
+  completedAt  DateTime? @map("completed_at")
+
+  // SLA
+  slaTargetAt DateTime? @map("sla_target_at")
+  slaMetFlag  Boolean?  @map("sla_met_flag")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  requester       User?     @relation("RequesterRequests", fields: [requesterId], references: [id])
+  origin          Location  @relation("RequestOrigin", fields: [originId], references: [id])
+  destination     Location  @relation("RequestDestination", fields: [destinationId], references: [id])
+  assignedVehicle Vehicle?  @relation(fields: [assignedVehicleId], references: [id])
+  assignedDriver  User?     @relation("AssignedDriverRequests", fields: [assignedDriverId], references: [id])
+  approvedBy      User?     @relation("ApproverRequests", fields: [approvedById], references: [id])
+  trip            Trip?
+  events          RequestEvent[]
+  referrals       ExternalReferral[]
+
+  @@map("transport_requests")
+}
+
+model RequestEvent {
+  id        String   @id @default(uuid())
+  requestId String   @map("request_id")
+  type      String // CREATED | APPROVED | REJECTED | ASSIGNED | RESCHEDULED | DISPATCHED | COMPLETED | CANCELLED | NO_SHOW | EMERGENCY_OVERRIDE | REFERRED_EXTERNAL
+  userId    String?  @map("user_id")
+  comment   String?
+  metadata  String? // JSON-encoded
+  createdAt DateTime @default(now()) @map("created_at")
+
+  request TransportRequest @relation(fields: [requestId], references: [id])
+  user    User?            @relation(fields: [userId], references: [id])
+
+  @@map("request_events")
+}
+
+// ─────────────────────────────────────────────
+// SCHEDULING / AVAILABILITY
+// ─────────────────────────────────────────────
+
+model ServiceWindow {
+  id          String  @id @default(uuid())
+  serviceType String  @map("service_type") // STANDARD | AMBULANCE
+  branchId    String? @map("branch_id")
+  dayOfWeek   Int     @map("day_of_week") // 0=Sun .. 6=Sat
+  startTime   String  @map("start_time") // "08:00"
+  endTime     String  @map("end_time") // "17:00"
+  slotMinutes Int     @default(30) @map("slot_minutes")
+  isActive    Boolean @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  branch Branch? @relation(fields: [branchId], references: [id])
+
+  @@map("service_windows")
+}
+
+model ScheduleBlock {
+  id           String   @id @default(uuid())
+  resourceType String   @map("resource_type") // VEHICLE | DRIVER
+  vehicleId    String?  @map("vehicle_id")
+  driverId     String?  @map("driver_id")
+  reason       String // MAINTENANCE | SHIFT | OFF | RESERVED | OTHER
+  startAt      DateTime @map("start_at")
+  endAt        DateTime @map("end_at")
+  note         String?
+  createdById  String   @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  vehicle Vehicle? @relation(fields: [vehicleId], references: [id])
+  driver  User?    @relation(fields: [driverId], references: [id])
+
+  @@map("schedule_blocks")
+}
+
+// ─────────────────────────────────────────────
+// OUTSOURCING (External providers)
+// ─────────────────────────────────────────────
+
+model ExternalProvider {
+  id           String  @id @default(uuid())
+  name         String
+  serviceType  String  @default("AMBULANCE") @map("service_type") // AMBULANCE | STANDARD | BOTH
+  phone        String?
+  contactName  String? @map("contact_name")
+  coverageNote String? @map("coverage_note")
+  isActive     Boolean @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  referrals ExternalReferral[]
+
+  @@map("external_providers")
+}
+
+model ExternalReferral {
+  id           String  @id @default(uuid())
+  requestId    String? @map("request_id")
+  serviceType  String  @map("service_type")
+  providerId   String? @map("provider_id")
+  providerName String  @map("provider_name")
+  reason       String // NO_UNIT | OUT_OF_HOURS | ALL_BUSY | OTHER
+  patientName  String? @map("patient_name")
+  notes        String?
+  status       String  @default("REFERRED") // REFERRED | CONFIRMED | CANCELLED
+  referredById String  @map("referred_by_id")
+  referredAt   DateTime @default(now()) @map("referred_at")
+
+  request  TransportRequest? @relation(fields: [requestId], references: [id])
+  provider ExternalProvider? @relation(fields: [providerId], references: [id])
+
+  @@map("external_referrals")
+}
+
+// ─────────────────────────────────────────────
+// TASK POOL & ROUTING
+// ─────────────────────────────────────────────
+
+model TransportTask {
+  id             String    @id @default(uuid())
+  code           String    @unique
+  type           String    @default("DELIVERY") // DROPOFF | PICKUP | DELIVERY | VISIT
+  requesterId    String?   @map("requester_id")
+  requesterName  String    @map("requester_name")
+  locationId     String?   @map("location_id")
+  addressText    String?   @map("address_text")
+  lat            Float?
+  lng            Float?
+  notes          String?
+  priority       String    @default("NORMAL") // NORMAL | HIGH
+  windowStart    DateTime? @map("window_start")
+  windowEnd      DateTime? @map("window_end")
+  serviceTimeMin Int       @default(5) @map("service_time_min")
+  status         String    @default("POOL") // POOL | ASSIGNED | EN_ROUTE | DONE | CANCELLED
+  routeId        String?   @map("route_id")
+  tripId         String?   @map("trip_id")
+  sortOrder      Int?      @map("sort_order")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  location Location?  @relation(fields: [locationId], references: [id])
+  route    RoutePlan? @relation(fields: [routeId], references: [id])
+  trip     Trip?      @relation(fields: [tripId], references: [id])
+
+  @@map("transport_tasks")
+}
+
+model RoutePlan {
+  id               String   @id @default(uuid())
+  code             String   @unique
+  driverId         String?  @map("driver_id")
+  vehicleId        String?  @map("vehicle_id")
+  status           String   @default("DRAFT") // DRAFT | DISPATCHED | IN_PROGRESS | DONE
+  plannedDate      DateTime @map("planned_date")
+  totalDistanceKm  Float?   @map("total_distance_km")
+  totalDurationMin Int?     @map("total_duration_min")
+  optimizedOrder   String?  @map("optimized_order") // JSON-encoded [taskId,...]
+  optimizerMeta    String?  @map("optimizer_meta") // JSON-encoded
+  tripId           String?  @unique @map("trip_id")
+  createdById      String   @map("created_by_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  driver  User?           @relation(fields: [driverId], references: [id])
+  vehicle Vehicle?        @relation(fields: [vehicleId], references: [id])
+  trip    Trip?           @relation(fields: [tripId], references: [id])
+  tasks   TransportTask[]
+
+  @@map("route_plans")
 }

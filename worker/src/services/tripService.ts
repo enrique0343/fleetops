@@ -11,6 +11,8 @@ interface StartTripInput {
   startLng?: number;
   comment?: string;
   deviceTimestamp: Date;
+  requestId?: string; // originating appointment, if any
+  priority?: string; // NORMAL | URGENT | EMERGENCY
 }
 
 interface EventInput {
@@ -61,6 +63,8 @@ export class TripService {
           startLat: input.startLat,
           startLng: input.startLng,
           comment: input.comment,
+          requestId: input.requestId,
+          priority: input.priority ?? 'NORMAL',
         },
       }),
       this.prisma.tripEvent.create({
@@ -222,6 +226,23 @@ export class TripService {
         data: { currentTripId: null },
       }),
     ]);
+
+    // If this trip came from an appointment or a route plan, close the loop.
+    if (trip.requestId) {
+      await this.prisma.$transaction([
+        this.prisma.transportRequest.update({
+          where: { id: trip.requestId },
+          data: { status: 'COMPLETED', completedAt: finishedAt },
+        }),
+        this.prisma.requestEvent.create({
+          data: { requestId: trip.requestId, type: 'COMPLETED', userId, comment: 'Viaje finalizado' },
+        }),
+      ]);
+    }
+    await this.prisma.routePlan.updateMany({
+      where: { tripId },
+      data: { status: 'DONE' },
+    });
 
     return this.getTripDetail(tripId);
   }

@@ -15,6 +15,13 @@ const dt = (v: any) => (v ? new Date(v) : new Date());
 trips.post('/start', authenticate, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   requireFields(body, ['vehicleId', 'originBranchId', 'destinationId']);
+
+  // Urgent self-dispatch (no appointment) requires a stated reason for traceability.
+  const priority = body.priority === 'URGENT' || body.priority === 'EMERGENCY' ? body.priority : 'NORMAL';
+  if (priority !== 'NORMAL' && !body.comment?.trim()) {
+    throw new AppError('Un viaje urgente requiere un motivo (comment)');
+  }
+
   const svc = new TripService(c.get('prisma'));
   const trip = await svc.startTrip({
     driverId: c.get('user').userId,
@@ -25,7 +32,22 @@ trips.post('/start', authenticate, async (c) => {
     startLng: body.startLng,
     comment: body.comment,
     deviceTimestamp: dt(body.deviceTimestamp),
+    priority,
   });
+
+  // Audit-trail urgent self-dispatch.
+  if (priority !== 'NORMAL') {
+    await c.get('prisma').tripEvent.create({
+      data: {
+        tripId: trip.id,
+        type: 'REPORT_INCIDENT',
+        userId: c.get('user').userId,
+        deviceTimestamp: dt(body.deviceTimestamp),
+        comment: `AUTO-DESPACHO ${priority}: ${body.comment}`,
+      },
+    });
+  }
+
   return c.json({ success: true, data: trip }, 201);
 });
 

@@ -25,3 +25,19 @@ export const requireAdmin: MiddlewareHandler<AppEnv> = async (c, next) => {
   }
   await next();
 };
+
+// Allow any of the given roles. Used for dispatcher-style endpoints where
+// ADMIN and DISPATCHER share responsibilities.
+export const requireRoles =
+  (...roles: string[]): MiddlewareHandler<AppEnv> =>
+  async (c, next) => {
+    const user = c.get('user');
+    if (!user) return c.json({ success: false, error: 'No autenticado' }, 401);
+    if (!roles.includes(user.role)) {
+      return c.json({ success: false, error: 'No tienes permisos para esta acción' }, 403);
+    }
+    await next();
+  };
+
+// Coordination = ADMIN or DISPATCHER.
+export const requireDispatcher = requireRoles('ADMIN', 'DISPATCHER');

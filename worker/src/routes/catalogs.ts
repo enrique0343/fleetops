@@ -56,9 +56,13 @@ catalogs.post('/vehicles', authenticate, requireAdmin, async (c) => {
       brand: body.brand,
       year: body.year,
       vehicleType: body.vehicleType,
+      serviceClass: body.serviceClass || (body.isAmbulance ? 'AMBULANCE' : 'ADMIN'),
       branchId: body.branchId,
       fuelType: body.fuelType,
       color: body.color,
+      isAmbulance: body.isAmbulance ?? false,
+      hasStretcher: body.hasStretcher ?? false,
+      hasOxygen: body.hasOxygen ?? false,
     },
   });
   return c.json({ success: true, data: vehicle }, 201);
@@ -74,10 +78,14 @@ catalogs.patch('/vehicles/:id', authenticate, requireAdmin, async (c) => {
       brand: body.brand,
       year: body.year,
       vehicleType: body.vehicleType,
+      serviceClass: body.serviceClass,
       branchId: body.branchId,
       fuelType: body.fuelType,
       color: body.color,
       isActive: body.isActive,
+      isAmbulance: body.isAmbulance,
+      hasStretcher: body.hasStretcher,
+      hasOxygen: body.hasOxygen,
     },
   });
   return c.json({ success: true, data: vehicle });

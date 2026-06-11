@@ -54,11 +54,37 @@ seed.post('/', async (c) => {
     },
   });
 
-  // ─── Vehicles ───
+  // ─── Requester (professional) + Dispatcher ───
+  await prisma.user.upsert({
+    where: { email: 'medico@fleetops.com' },
+    update: {},
+    create: {
+      email: 'medico@fleetops.com',
+      passwordHash: await hashPassword('medico123'),
+      fullName: 'Dra. Ana Solicitante',
+      role: 'REQUESTER',
+      department: 'Urgencias',
+      phone: '+1222333444',
+      branchId: branchCentral.id,
+    },
+  });
+  await prisma.user.upsert({
+    where: { email: 'dispatcher@fleetops.com' },
+    update: {},
+    create: {
+      email: 'dispatcher@fleetops.com',
+      passwordHash: await hashPassword('dispatch123'),
+      fullName: 'Coordinador de Agenda',
+      role: 'DISPATCHER',
+      branchId: branchCentral.id,
+    },
+  });
+
+  // ─── Vehicles (incl. one ambulance) ───
   const vehicles = [
-    { plate: 'ABC-123', brand: 'Toyota', model: 'Hilux', year: 2022, fuelType: 'Diesel', color: 'Blanco' },
-    { plate: 'XYZ-789', brand: 'Ford', model: 'Transit', year: 2021, fuelType: 'Diesel', color: 'Gris' },
-    { plate: 'DEF-456', brand: 'Chevrolet', model: 'N300', year: 2023, fuelType: 'Gasolina', color: 'Azul' },
+    { plate: 'ABC-123', brand: 'Toyota', model: 'Hilux', year: 2022, fuelType: 'Diesel', color: 'Blanco', serviceClass: 'ADMIN', isAmbulance: false, hasStretcher: false, hasOxygen: false },
+    { plate: 'XYZ-789', brand: 'Ford', model: 'Transit', year: 2021, fuelType: 'Diesel', color: 'Gris', serviceClass: 'ADMIN', isAmbulance: false, hasStretcher: false, hasOxygen: false },
+    { plate: 'AMB-001', brand: 'Mercedes-Benz', model: 'Sprinter', year: 2023, fuelType: 'Diesel', color: 'Blanco', serviceClass: 'AMBULANCE', isAmbulance: true, hasStretcher: true, hasOxygen: true },
   ];
   for (const v of vehicles) {
     await prisma.vehicle.upsert({
@@ -98,12 +124,42 @@ seed.post('/', async (c) => {
     if (!existing) await prisma.incidentType.create({ data: it as any });
   }
 
+  // ─── Service windows ───
+  // Standard transport: Mon-Fri 08:00-17:00. Ambulance: 24/7.
+  const existingWindows = await prisma.serviceWindow.count();
+  if (existingWindows === 0) {
+    const windows: any[] = [];
+    for (let d = 1; d <= 5; d++) {
+      windows.push({ serviceType: 'STANDARD', dayOfWeek: d, startTime: '08:00', endTime: '17:00', slotMinutes: 30 });
+    }
+    for (let d = 0; d <= 6; d++) {
+      windows.push({ serviceType: 'AMBULANCE', dayOfWeek: d, startTime: '00:00', endTime: '23:59', slotMinutes: 30 });
+    }
+    for (const w of windows) await prisma.serviceWindow.create({ data: w });
+  }
+
+  // ─── External providers (outsourcing) ───
+  const existingProviders = await prisma.externalProvider.count();
+  if (existingProviders === 0) {
+    await prisma.externalProvider.create({
+      data: {
+        name: 'Ambulancias Vida Express',
+        serviceType: 'AMBULANCE',
+        phone: '+1 800 911 911',
+        contactName: 'Central de despacho',
+        coverageNote: 'Cobertura metropolitana 24/7',
+      },
+    });
+  }
+
   return c.json({
     success: true,
     message: 'Seed completado',
     credentials: {
       admin: 'admin@fleetops.com / admin123',
       driver: 'driver@fleetops.com / driver123',
+      requester: 'medico@fleetops.com / medico123',
+      dispatcher: 'dispatcher@fleetops.com / dispatch123',
     },
   });
 });

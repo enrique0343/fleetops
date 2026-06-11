@@ -10,6 +10,10 @@ import catalogsRoutes from './routes/catalogs';
 import fuelRoutes from './routes/fuel';
 import auditRoutes from './routes/audit';
 import seedRoutes from './routes/seed';
+import requestsRoutes from './routes/requests';
+import schedulingRoutes from './routes/scheduling';
+import providersRoutes from './routes/providers';
+import routesRoutes from './routes/routes';
 
 const app = new Hono<AppEnv>();
 
@@ -48,6 +52,10 @@ app.route('/api/catalogs', catalogsRoutes);
 app.route('/api/fuel', fuelRoutes);
 app.route('/api/audit', auditRoutes);
 app.route('/api/seed', seedRoutes);
+app.route('/api/requests', requestsRoutes);
+app.route('/api/scheduling', schedulingRoutes);
+app.route('/api/outsourcing', providersRoutes);
+app.route('/api/routes', routesRoutes);
 
 // 404
 app.notFound((c) =>
