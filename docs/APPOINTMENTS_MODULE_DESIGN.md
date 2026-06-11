@@ -9,6 +9,12 @@
 >    del aplicativo.
 > 3. Las ambulancias en **emergencia pueden saltarse la agenda** (despacho
 >    inmediato) y se mide su **SLA de respuesta**.
+>
+> **Ampliación v2** (ver `APPOINTMENTS_MODULE_DESIGN_V2.md`): disponibilidad de
+> ambulancias **visible para el profesional** con **fallback a outsourcing**;
+> **horarios de servicio configurables**; **pool de tareas + ruteo
+> multi-parada** con GPS gratuito (OSM) e **híbrido Claude/MCP + solver**;
+> **auto-despacho de emergencia no-ambulancia**.
 
 ---
 
