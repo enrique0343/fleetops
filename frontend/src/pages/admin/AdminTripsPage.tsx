@@ -41,9 +41,11 @@ export default function AdminTripsPage() {
       if (dateTo) params.set('dateTo', dateTo);
 
       const res = await api.get(`/trips?${params.toString()}`);
-      setTrips(res.data.data || []);
-      setTotal(res.data.total || 0);
-      setTotalPages(res.data.totalPages || 1);
+      // El backend pagina: { success, data: { data: [...], total, totalPages } }
+      const tp = res.data.data || {};
+      setTrips(tp.data || []);
+      setTotal(tp.total || 0);
+      setTotalPages(tp.totalPages || 1);
     } finally {
       setLoading(false);
     }

@@ -41,9 +41,11 @@ export default function AdminFuelPage() {
         api.get(`/fuel?${params.toString()}`),
         api.get('/fuel/admin/kpis'),
       ]);
-      setRecords(fRes.data.data || []);
-      setTotal(fRes.data.total || 0);
-      setTotalPages(fRes.data.totalPages || 1);
+      // El backend pagina: { success, data: { data: [...], total, totalPages } }
+      const fp = fRes.data.data || {};
+      setRecords(fp.data || []);
+      setTotal(fp.total || 0);
+      setTotalPages(fp.totalPages || 1);
       setKpis(kRes.data.data);
     } finally {
       setLoading(false);

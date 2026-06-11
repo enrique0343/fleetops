@@ -24,9 +24,10 @@ export function DriverHistoryPage() {
       const res = await api.get('/trips/my/history', {
         params: { page: 1, limit: 30 }
       });
-      const data = res.data;
-      setTrips(data.data || []);
-      setTotal(data.total || 0);
+      // El backend pagina: { success, data: { data: [...], total, ... } }
+      const page = res.data.data || {};
+      setTrips(page.data || []);
+      setTotal(page.total || 0);
     } catch (err) {
       console.error('Error cargando historial:', err);
       setError('No se pudo cargar el historial. Verifica la conexión con el servidor.');

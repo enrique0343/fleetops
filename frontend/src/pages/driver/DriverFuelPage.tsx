@@ -61,7 +61,8 @@ export default function DriverFuelPage() {
   const loadRecords = useCallback(async () => {
     try {
       const res = await api.get('/fuel', { params: { limit: 20 } });
-      setMyRecords(res.data.data || []);
+      // El backend pagina: { success, data: { data: [...], total, ... } }
+      setMyRecords(res.data.data?.data || []);
     } catch (err) {
       console.error('Error cargando registros:', err);
     }
