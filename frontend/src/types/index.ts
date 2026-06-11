@@ -190,6 +190,15 @@ export interface AuthState {
   isLoading: boolean;
 }
 
+export interface ActiveTripSummary {
+  id: string;
+  status: TripStatus;
+  startedAt: string;
+  driver?: { fullName: string };
+  vehicle?: { plate: string };
+  destination?: { name: string };
+}
+
 export interface DashboardStats {
   totalToday: number;
   activeNow: number;
@@ -197,6 +206,16 @@ export interface DashboardStats {
   telegramFailed: number;
   avgDurationMinutes: number;
   fuelRecordsToday: number;
+  // Extensiones ejecutivas (opcionales: el backend legacy no las envía)
+  finishedToday?: number;
+  forcedWeek?: number;
+  weekTrips?: number;
+  weekIncidents?: number;
+  fleet?: { total: number; inUse: number };
+  trend7d?: { date: string; trips: number }[];
+  topDrivers?: { name: string; trips: number }[];
+  activeTrips?: ActiveTripSummary[];
+  fuelWeek?: { records: number; quantity: number; amount: number };
 }
 
 export interface PaginatedResult<T> {

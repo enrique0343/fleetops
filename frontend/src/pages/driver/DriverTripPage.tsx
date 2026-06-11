@@ -2,17 +2,55 @@ import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useAuth } from '../../store/AuthContext';
 import api, { getErrorMessage } from '../../services/api';
 import { Trip, Branch, Vehicle, Location, IncidentType } from '../../types';
-import {
-  Button, Select, Alert, Card, Modal, Textarea, StatusBadge
-} from '../../components/ui';
+import { Button, Select, Alert, Card, Modal, Textarea } from '../../components/ui';
 import {
   Play, Square, MapPin, AlertTriangle, Navigation,
-  Clock, Truck, Building2, Zap, ChevronRight
+  Truck, Building2, CheckCircle2, History, Timer,
 } from 'lucide-react';
-import { formatDistanceToNow, format } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 type Phase = 'setup' | 'active';
+
+const LAST_TRIP_KEY = 'fleetops_last_trip_setup';
+
+// Hero visual por estado del viaje
+const statusHero: Record<string, { label: string; sub: string; classes: string; dot: string }> = {
+  IN_TRANSIT: {
+    label: 'En tránsito',
+    sub: 'Conduce con precaución',
+    classes: 'from-blue-600/30 to-blue-900/10 border-blue-700/50',
+    dot: 'bg-blue-400',
+  },
+  IN_STOP: {
+    label: 'En parada',
+    sub: 'Continúa cuando estés listo',
+    classes: 'from-amber-600/30 to-amber-900/10 border-amber-700/50',
+    dot: 'bg-amber-400',
+  },
+  IN_INCIDENT: {
+    label: 'Incidencia activa',
+    sub: 'Resuelve y continúa la ruta',
+    classes: 'from-red-600/30 to-red-900/10 border-red-700/50',
+    dot: 'bg-red-400',
+  },
+};
+
+function useElapsed(startedAt?: string) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    if (!startedAt) return;
+    const id = setInterval(() => force((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+  if (!startedAt) return '';
+  const sec = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
 
 export default function DriverTripPage() {
   const { user } = useAuth();
@@ -21,6 +59,7 @@ export default function DriverTripPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState('');
+  const [justFinished, setJustFinished] = useState(false);
 
   // Catalogs
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -33,6 +72,7 @@ export default function DriverTripPage() {
   const [vehicleId, setVehicleId] = useState('');
   const [destinationId, setDestinationId] = useState('');
   const [tripComment, setTripComment] = useState('');
+  const [hasLastSetup, setHasLastSetup] = useState(false);
 
   // Modals
   const [stopModal, setStopModal] = useState(false);
@@ -43,6 +83,8 @@ export default function DriverTripPage() {
   const [incidentComment, setIncidentComment] = useState('');
   const [finishBranchId, setFinishBranchId] = useState('');
   const [finishComment, setFinishComment] = useState('');
+
+  const elapsed = useElapsed(phase === 'active' ? activeTrip?.startedAt : undefined);
 
   const loadActiveTrip = useCallback(async () => {
     try {
@@ -69,14 +111,21 @@ export default function DriverTripPage() {
         api.get('/catalogs/incident-types'),
       ]);
 
-      setBranches(brRes.data.data || []);
-      setVehicles(vRes.data.data || []);
-      setLocations(lRes.data.data || []);
+      const br = brRes.data.data || [];
+      const vs = vRes.data.data || [];
+      const ls = lRes.data.data || [];
+      setBranches(br);
+      setVehicles(vs);
+      setLocations(ls);
       setIncidentTypes(iRes.data.data || []);
 
-      if (user?.branch?.id) {
-        setOriginBranchId(user.branch.id);
-      }
+      if (user?.branch?.id) setOriginBranchId(user.branch.id);
+      else if (br.length === 1) setOriginBranchId(br[0].id);
+      // Con una sola opción disponible, pre-selecciona para ahorrar toques
+      if (vs.length === 1) setVehicleId(vs[0].id);
+      if (ls.length === 1) setDestinationId(ls[0].id);
+
+      setHasLastSetup(Boolean(localStorage.getItem(LAST_TRIP_KEY)));
     } catch (err) {
       console.error('Error loading catalogs:', err);
     }
@@ -87,13 +136,27 @@ export default function DriverTripPage() {
     loadCatalogs();
   }, [loadActiveTrip, loadCatalogs]);
 
+  const applyLastSetup = () => {
+    try {
+      const last = JSON.parse(localStorage.getItem(LAST_TRIP_KEY) || '{}');
+      if (last.originBranchId && branches.some((b) => b.id === last.originBranchId)) {
+        setOriginBranchId(last.originBranchId);
+      }
+      if (last.vehicleId && vehicles.some((v) => v.id === last.vehicleId)) {
+        setVehicleId(last.vehicleId);
+      }
+      if (last.destinationId && locations.some((l) => l.id === last.destinationId)) {
+        setDestinationId(last.destinationId);
+      }
+    } catch { /* setup previo corrupto: ignorar */ }
+  };
+
   const getGeoLocation = (): Promise<{ lat?: number; lng?: number }> =>
     new Promise((resolve) => {
       if (!navigator.geolocation) {
         resolve({});
         return;
       }
-
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         () => resolve({}),
@@ -106,10 +169,8 @@ export default function DriverTripPage() {
       setError('Completa todos los campos requeridos');
       return;
     }
-
     setError('');
     setActionLoading('start');
-
     try {
       const geo = await getGeoLocation();
       const res = await api.post('/trips/start', {
@@ -120,8 +181,9 @@ export default function DriverTripPage() {
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
-
+      localStorage.setItem(LAST_TRIP_KEY, JSON.stringify({ originBranchId, vehicleId, destinationId }));
       setActiveTrip(res.data.data);
+      setJustFinished(false);
       setPhase('active');
     } catch (err) {
       setError(getErrorMessage(err));
@@ -132,9 +194,7 @@ export default function DriverTripPage() {
 
   const handleStop = async () => {
     if (!activeTrip) return;
-
     setActionLoading('stop');
-
     try {
       const geo = await getGeoLocation();
       const res = await api.post(`/trips/${activeTrip.id}/stop`, {
@@ -142,7 +202,6 @@ export default function DriverTripPage() {
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
-
       setActiveTrip((prev) => (prev ? { ...prev, status: res.data.data.status } : null));
       setStopModal(false);
       setStopComment('');
@@ -155,14 +214,11 @@ export default function DriverTripPage() {
 
   const handleResume = async () => {
     if (!activeTrip) return;
-
     setActionLoading('resume');
-
     try {
       await api.post(`/trips/${activeTrip.id}/resume`, {
         deviceTimestamp: new Date().toISOString(),
       });
-
       setActiveTrip((prev) => (prev ? { ...prev, status: 'IN_TRANSIT' } : null));
     } catch (err) {
       setError(getErrorMessage(err));
@@ -173,9 +229,7 @@ export default function DriverTripPage() {
 
   const handleIncident = async () => {
     if (!activeTrip || !incidentComment.trim()) return;
-
     setActionLoading('incident');
-
     try {
       const geo = await getGeoLocation();
       await api.post(`/trips/${activeTrip.id}/incident`, {
@@ -184,7 +238,6 @@ export default function DriverTripPage() {
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
-
       setActiveTrip((prev) => (prev ? { ...prev, status: 'IN_INCIDENT' } : null));
       setIncidentModal(false);
       setIncidentComment('');
@@ -198,9 +251,7 @@ export default function DriverTripPage() {
 
   const handleFinish = async () => {
     if (!activeTrip) return;
-
     setActionLoading('finish');
-
     try {
       const geo = await getGeoLocation();
       await api.post(`/trips/${activeTrip.id}/finish`, {
@@ -209,7 +260,6 @@ export default function DriverTripPage() {
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
-
       setActiveTrip(null);
       setPhase('setup');
       setFinishModal(false);
@@ -218,6 +268,8 @@ export default function DriverTripPage() {
       setTripComment('');
       setFinishBranchId('');
       setFinishComment('');
+      setJustFinished(true);
+      loadCatalogs();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -240,9 +292,26 @@ export default function DriverTripPage() {
 
       {phase === 'setup' && (
         <>
-          <div className="pt-2">
-            <h2 className="text-xl font-bold text-white">Nuevo viaje</h2>
-            <p className="text-slate-400 text-sm mt-1">Selecciona los datos del viaje</p>
+          {justFinished && (
+            <div className="flex items-center gap-3 p-4 rounded-2xl border border-emerald-700/50 bg-emerald-900/30">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <p className="text-sm text-emerald-300">Viaje finalizado correctamente. ¡Buen trabajo!</p>
+            </div>
+          )}
+
+          <div className="pt-2 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-white">Nuevo viaje</h2>
+              <p className="text-slate-400 text-sm mt-1">Hola, {user?.fullName?.split(' ')[0]} 👋</p>
+            </div>
+            {hasLastSetup && (
+              <button
+                onClick={applyLastSetup}
+                className="flex items-center gap-1.5 text-xs font-medium text-blue-400 bg-blue-950/50 border border-blue-800/50 rounded-xl px-3 py-2 hover:bg-blue-900/50 transition-colors"
+              >
+                <History className="w-3.5 h-3.5" /> Repetir último
+              </button>
+            )}
           </div>
 
           <Card>
@@ -304,140 +373,100 @@ export default function DriverTripPage() {
 
       {phase === 'active' && activeTrip && (
         <>
-          <div className="pt-2 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-white">Viaje activo</h2>
-              <p className="text-slate-400 text-sm mt-0.5">
-                Iniciado{' '}
-                {formatDistanceToNow(new Date(activeTrip.startedAt), {
-                  locale: es,
-                  addSuffix: true,
-                })}
-              </p>
+          {/* Hero de estado con cronómetro en vivo */}
+          <div className={`rounded-3xl border bg-gradient-to-br p-5 ${(statusHero[activeTrip.status] || statusHero.IN_TRANSIT).classes}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${(statusHero[activeTrip.status] || statusHero.IN_TRANSIT).dot}`} />
+                <span className="text-white font-semibold">
+                  {(statusHero[activeTrip.status] || statusHero.IN_TRANSIT).label}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-white font-mono text-2xl font-bold tabular-nums">
+                <Timer className="w-5 h-5 opacity-60" />
+                {elapsed}
+              </div>
             </div>
-            <StatusBadge status={activeTrip.status} />
+            <p className="text-slate-300/80 text-xs mt-1.5">
+              {(statusHero[activeTrip.status] || statusHero.IN_TRANSIT).sub} · inicio{' '}
+              {format(new Date(activeTrip.startedAt), 'HH:mm', { locale: es })}
+            </p>
+
+            {/* Ruta resumida */}
+            <div className="mt-4 flex items-center gap-2 text-sm">
+              <span className="flex items-center gap-1.5 text-slate-200 min-w-0">
+                <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="truncate">{activeTrip.originBranch?.name || '—'}</span>
+              </span>
+              <span className="text-slate-500 shrink-0">→</span>
+              <span className="flex items-center gap-1.5 text-white font-medium min-w-0">
+                <MapPin className="w-4 h-4 text-slate-300 shrink-0" />
+                <span className="truncate">{activeTrip.destination?.name || '—'}</span>
+              </span>
+            </div>
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
+              <Truck className="w-3.5 h-3.5" />
+              {activeTrip.vehicle
+                ? `${activeTrip.vehicle.plate} · ${activeTrip.vehicle.brand} ${activeTrip.vehicle.model}`
+                : '—'}
+              {activeTrip.comment && <span className="truncate"> · {activeTrip.comment}</span>}
+            </div>
           </div>
 
-          <Card>
-            <div className="space-y-3">
-              <TripInfoRow
-                icon={<Truck className="w-4 h-4 text-slate-400" />}
-                label="Vehículo"
-                value={
-                  activeTrip.vehicle
-                    ? `${activeTrip.vehicle.plate} — ${activeTrip.vehicle.brand} ${activeTrip.vehicle.model}`
-                    : vehicleId
-                }
+          {/* Acciones grandes según estado */}
+          {activeTrip.status === 'IN_TRANSIT' && (
+            <div className="grid grid-cols-2 gap-3">
+              <BigAction
+                icon={<Square className="w-6 h-6" />}
+                label="Parada"
+                sub="Registrar parada"
+                tone="amber"
+                onClick={() => setStopModal(true)}
               />
-
-              <TripInfoRow
-                icon={<Building2 className="w-4 h-4 text-slate-400" />}
-                label="Origen"
-                value={activeTrip.originBranch?.name || '—'}
+              <BigAction
+                icon={<AlertTriangle className="w-6 h-6" />}
+                label="Incidencia"
+                sub="Reportar problema"
+                tone="red"
+                onClick={() => setIncidentModal(true)}
               />
-
-              <TripInfoRow
-                icon={<MapPin className="w-4 h-4 text-slate-400" />}
-                label="Destino"
-                value={activeTrip.destination?.name || '—'}
-              />
-
-              <TripInfoRow
-                icon={<Clock className="w-4 h-4 text-slate-400" />}
-                label="Inicio"
-                value={format(new Date(activeTrip.startedAt), 'dd/MM/yyyy HH:mm', { locale: es })}
-              />
-
-              {activeTrip.comment && (
-                <TripInfoRow
-                  icon={<ChevronRight className="w-4 h-4 text-slate-400" />}
-                  label="Nota"
-                  value={activeTrip.comment}
-                />
-              )}
             </div>
-          </Card>
-
-          {activeTrip.status === 'IN_STOP' && (
-            <Alert
-              type="warning"
-              message="Viaje en parada. Cuando estés listo, continúa la ruta."
-            />
           )}
 
-          {activeTrip.status === 'IN_INCIDENT' && (
-            <Alert
-              type="error"
-              message="Incidencia registrada. Resuelve el problema y continúa la ruta."
-            />
+          {(activeTrip.status === 'IN_STOP' || activeTrip.status === 'IN_INCIDENT') && (
+            <div className="grid grid-cols-2 gap-3">
+              <BigAction
+                icon={<Navigation className="w-6 h-6" />}
+                label="Continuar"
+                sub="Reanudar ruta"
+                tone="blue"
+                loading={actionLoading === 'resume'}
+                onClick={handleResume}
+              />
+              <BigAction
+                icon={<AlertTriangle className="w-6 h-6" />}
+                label="Incidencia"
+                sub="Reportar problema"
+                tone="red"
+                disabled={activeTrip.status === 'IN_INCIDENT'}
+                onClick={() => setIncidentModal(true)}
+              />
+            </div>
           )}
 
-          <div className="space-y-3">
-            {activeTrip.status === 'IN_TRANSIT' && (
-              <>
-                <Button
-                  fullWidth
-                  variant="secondary"
-                  size="lg"
-                  icon={<Square className="w-5 h-5" />}
-                  onClick={() => setStopModal(true)}
-                  loading={actionLoading === 'stop'}
-                >
-                  Registrar parada
-                </Button>
-
-                <Button
-                  fullWidth
-                  variant="warning"
-                  size="lg"
-                  icon={<AlertTriangle className="w-5 h-5" />}
-                  onClick={() => setIncidentModal(true)}
-                >
-                  Reportar incidencia
-                </Button>
-              </>
-            )}
-
-            {(activeTrip.status === 'IN_STOP' || activeTrip.status === 'IN_INCIDENT') && (
-              <>
-                <Button
-                  fullWidth
-                  variant="primary"
-                  size="lg"
-                  icon={<Navigation className="w-5 h-5" />}
-                  onClick={handleResume}
-                  loading={actionLoading === 'resume'}
-                >
-                  Continuar ruta
-                </Button>
-
-                {activeTrip.status === 'IN_STOP' && (
-                  <Button
-                    fullWidth
-                    variant="warning"
-                    size="lg"
-                    icon={<AlertTriangle className="w-5 h-5" />}
-                    onClick={() => setIncidentModal(true)}
-                  >
-                    Reportar incidencia
-                  </Button>
-                )}
-              </>
-            )}
-
-            <Button
-              fullWidth
-              variant="success"
-              size="lg"
-              icon={<Zap className="w-5 h-5" />}
-              onClick={() => setFinishModal(true)}
-            >
-              Finalizar viaje
-            </Button>
-          </div>
+          <Button
+            fullWidth
+            variant="success"
+            size="lg"
+            icon={<CheckCircle2 className="w-5 h-5" />}
+            onClick={() => setFinishModal(true)}
+          >
+            Finalizar viaje
+          </Button>
         </>
       )}
 
+      {/* Modal: parada */}
       <Modal
         open={stopModal}
         onClose={() => setStopModal(false)}
@@ -447,12 +476,7 @@ export default function DriverTripPage() {
             <Button variant="ghost" fullWidth onClick={() => setStopModal(false)}>
               Cancelar
             </Button>
-            <Button
-              fullWidth
-              variant="warning"
-              onClick={handleStop}
-              loading={actionLoading === 'stop'}
-            >
+            <Button fullWidth variant="warning" onClick={handleStop} loading={actionLoading === 'stop'}>
               Confirmar parada
             </Button>
           </div>
@@ -462,11 +486,12 @@ export default function DriverTripPage() {
           label="Comentario (opcional)"
           value={stopComment}
           onChange={(e) => setStopComment(e.target.value)}
-          placeholder="¿Por qué haces esta parada?"
+          placeholder="¿Por qué haces esta parada? (puedes dejarlo vacío)"
           rows={3}
         />
       </Modal>
 
+      {/* Modal: incidencia — tipos como chips de un toque */}
       <Modal
         open={incidentModal}
         onClose={() => setIncidentModal(false)}
@@ -489,27 +514,40 @@ export default function DriverTripPage() {
         }
       >
         <div className="space-y-4">
-          <Select
-            label="Tipo de incidencia"
-            value={incidentTypeId}
-            onChange={(e) => setIncidentTypeId(e.target.value)}
-            placeholder="Seleccionar tipo..."
-            options={incidentTypes.map((t) => ({
-              value: t.id,
-              label: `${t.name} (${severityLabel(t.severity)})`,
-            }))}
-          />
+          <div>
+            <p className="block text-sm font-medium text-slate-300 mb-2">Tipo de incidencia</p>
+            <div className="flex flex-wrap gap-2">
+              {incidentTypes.map((t) => {
+                const selected = incidentTypeId === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setIncidentTypeId(selected ? '' : t.id)}
+                    className={`px-3 py-2 rounded-xl text-xs font-medium border transition-colors ${
+                      selected
+                        ? severityChipSelected(t.severity)
+                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
+                    }`}
+                  >
+                    {t.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <Textarea
             label="Descripción *"
             value={incidentComment}
             onChange={(e) => setIncidentComment(e.target.value)}
-            placeholder="Describe detalladamente la incidencia..."
-            rows={4}
+            placeholder="Describe brevemente lo ocurrido..."
+            rows={3}
           />
         </div>
       </Modal>
 
+      {/* Modal: finalizar */}
       <Modal
         open={finishModal}
         onClose={() => setFinishModal(false)}
@@ -519,12 +557,7 @@ export default function DriverTripPage() {
             <Button variant="ghost" fullWidth onClick={() => setFinishModal(false)}>
               Cancelar
             </Button>
-            <Button
-              fullWidth
-              variant="success"
-              onClick={handleFinish}
-              loading={actionLoading === 'finish'}
-            >
+            <Button fullWidth variant="success" onClick={handleFinish} loading={actionLoading === 'finish'}>
               Confirmar finalización
             </Button>
           </div>
@@ -554,33 +587,44 @@ export default function DriverTripPage() {
   );
 }
 
-function TripInfoRow({
-  icon,
-  label,
-  value,
-}: {
+const bigActionTones: Record<string, string> = {
+  amber: 'border-amber-700/60 bg-amber-950/40 text-amber-300 active:bg-amber-900/50',
+  red: 'border-red-700/60 bg-red-950/40 text-red-300 active:bg-red-900/50',
+  blue: 'border-blue-700/60 bg-blue-950/40 text-blue-300 active:bg-blue-900/50',
+};
+
+function BigAction({ icon, label, sub, tone, onClick, loading, disabled }: {
   icon: ReactNode;
   label: string;
-  value: string;
+  sub: string;
+  tone: keyof typeof bigActionTones;
+  onClick: () => void;
+  loading?: boolean;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex items-start gap-3">
-      <span className="mt-0.5 shrink-0">{icon}</span>
-      <div className="min-w-0">
-        <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">{label}</p>
-        <p className="text-slate-200 text-sm mt-0.5 break-words">{value}</p>
-      </div>
-    </div>
+    <button
+      onClick={onClick}
+      disabled={loading || disabled}
+      className={`flex flex-col items-center gap-2 p-5 rounded-2xl border transition-all active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed ${bigActionTones[tone]}`}
+    >
+      {loading ? (
+        <div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" />
+      ) : (
+        icon
+      )}
+      <span className="text-sm font-semibold">{label}</span>
+      <span className="text-[11px] opacity-70 -mt-1.5">{sub}</span>
+    </button>
   );
 }
 
-function severityLabel(s: string) {
+function severityChipSelected(severity: string): string {
   const map: Record<string, string> = {
-    LOW: 'Baja',
-    MEDIUM: 'Media',
-    HIGH: 'Alta',
-    CRITICAL: 'Crítica',
+    LOW: 'bg-slate-600 border-slate-500 text-white',
+    MEDIUM: 'bg-amber-600 border-amber-500 text-white',
+    HIGH: 'bg-orange-600 border-orange-500 text-white',
+    CRITICAL: 'bg-red-600 border-red-500 text-white',
   };
-
-  return map[s] || s;
+  return map[severity] || map.MEDIUM;
 }

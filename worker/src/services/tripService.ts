@@ -45,9 +45,13 @@ export class TripService {
     if (!vehicle) throw new AppError('Vehículo no encontrado', 404);
     if (vehicle.currentTripId) throw new AppError('El vehículo ya está en uso', 409);
 
-    const trip = await this.prisma.$transaction(async (tx) => {
-      const newTrip = await tx.trip.create({
+    // D1 only supports batch transactions, so the trip id is generated
+    // up-front to let the dependent writes go in a single batch.
+    const tripId = crypto.randomUUID();
+    await this.prisma.$transaction([
+      this.prisma.trip.create({
         data: {
+          id: tripId,
           driverId: input.driverId,
           vehicleId: input.vehicleId,
           originBranchId: input.originBranchId,
@@ -58,28 +62,24 @@ export class TripService {
           startLng: input.startLng,
           comment: input.comment,
         },
-      });
-
-      await tx.tripEvent.create({
+      }),
+      this.prisma.tripEvent.create({
         data: {
-          tripId: newTrip.id,
+          tripId,
           type: 'START_TRIP',
           userId: input.driverId,
           deviceTimestamp: input.deviceTimestamp,
           comment: input.comment,
           metadata: input.startLat ? toJson({ lat: input.startLat, lng: input.startLng }) : null,
         },
-      });
-
-      await tx.vehicle.update({
+      }),
+      this.prisma.vehicle.update({
         where: { id: input.vehicleId },
-        data: { currentTripId: newTrip.id },
-      });
+        data: { currentTripId: tripId },
+      }),
+    ]);
 
-      return newTrip;
-    });
-
-    return this.getTripDetail(trip.id);
+    return this.getTripDetail(tripId);
   }
 
   async getActiveTrip(driverId: string) {
@@ -193,8 +193,8 @@ export class TripService {
     const finishedAt = input.deviceTimestamp;
     const durationMinutes = Math.round((finishedAt.getTime() - trip.startedAt.getTime()) / 60000);
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      await tx.tripEvent.create({
+    await this.prisma.$transaction([
+      this.prisma.tripEvent.create({
         data: {
           tripId,
           type: 'FINISH_TRIP',
@@ -203,9 +203,8 @@ export class TripService {
           comment: input.comment,
           metadata: input.endLat ? toJson({ lat: input.endLat, lng: input.endLng }) : null,
         },
-      });
-
-      const t = await tx.trip.update({
+      }),
+      this.prisma.trip.update({
         where: { id: tripId },
         data: {
           status: 'FINISHED',
@@ -217,17 +216,14 @@ export class TripService {
           closureBranchId: input.closureBranchId,
           comment: input.comment || trip.comment,
         },
-      });
-
-      await tx.vehicle.update({
+      }),
+      this.prisma.vehicle.update({
         where: { id: trip.vehicleId },
         data: { currentTripId: null },
-      });
+      }),
+    ]);
 
-      return t;
-    });
-
-    return this.getTripDetail(updated.id);
+    return this.getTripDetail(tripId);
   }
 
   async getTripDetail(tripId: string) {
@@ -317,8 +313,8 @@ export class TripService {
     const finishedAt = new Date();
     const durationMinutes = Math.round((finishedAt.getTime() - trip.startedAt.getTime()) / 60000);
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      await tx.tripEvent.create({
+    await this.prisma.$transaction([
+      this.prisma.tripEvent.create({
         data: {
           tripId,
           type: 'FORCE_CLOSE',
@@ -326,9 +322,8 @@ export class TripService {
           deviceTimestamp: finishedAt,
           comment: reason,
         },
-      });
-
-      const t = await tx.trip.update({
+      }),
+      this.prisma.trip.update({
         where: { id: tripId },
         data: {
           status: 'FINISHED',
@@ -339,14 +334,12 @@ export class TripService {
           closureBranchId,
           comment: reason,
         },
-      });
-
-      await tx.vehicle.update({
+      }),
+      this.prisma.vehicle.update({
         where: { id: trip.vehicleId },
         data: { currentTripId: null },
-      });
-
-      await tx.auditLog.create({
+      }),
+      this.prisma.auditLog.create({
         data: {
           entityName: 'Trip',
           entityId: tripId,
@@ -356,12 +349,10 @@ export class TripService {
           newValue: toJson({ status: 'FINISHED', closureType: 'FORCED' }),
           reason,
         },
-      });
+      }),
+    ]);
 
-      return t;
-    });
-
-    return this.getTripDetail(updated.id);
+    return this.getTripDetail(tripId);
   }
 
   async correctTrip(
@@ -383,8 +374,8 @@ export class TripService {
       ? Math.round((newFinishedAt.getTime() - trip.startedAt.getTime()) / 60000)
       : trip.durationMinutes;
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const t = await tx.trip.update({
+    await this.prisma.$transaction([
+      this.prisma.trip.update({
         where: { id: tripId },
         data: {
           finishedAt: newFinishedAt,
@@ -394,9 +385,8 @@ export class TripService {
           closureType: 'ADMIN_CORRECTION',
           correctionFlag: true,
         },
-      });
-
-      await tx.tripEvent.create({
+      }),
+      this.prisma.tripEvent.create({
         data: {
           tripId,
           type: 'ADMIN_CORRECTION',
@@ -404,9 +394,8 @@ export class TripService {
           deviceTimestamp: new Date(),
           comment: input.reason,
         },
-      });
-
-      await tx.auditLog.create({
+      }),
+      this.prisma.auditLog.create({
         data: {
           entityName: 'Trip',
           entityId: tripId,
@@ -420,35 +409,116 @@ export class TripService {
           }),
           reason: input.reason,
         },
-      });
+      }),
+    ]);
 
-      return t;
-    });
-
-    return this.getTripDetail(updated.id);
+    return this.getTripDetail(tripId);
   }
 
   async getDashboardStats() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 6);
 
-    const [totalToday, activeNow, incidentsToday, telegramFailed, avgDurationResult, fuelToday] =
-      await Promise.all([
-        this.prisma.trip.count({ where: { startedAt: { gte: today } } }),
-        this.prisma.trip.count({ where: { status: { in: ACTIVE_STATUSES } } }),
-        this.prisma.trip.count({ where: { status: 'IN_INCIDENT' } }),
-        this.prisma.trip.count({ where: { telegramDeliveryStatus: 'FAILED' } }),
-        this.prisma.trip.aggregate({ _avg: { durationMinutes: true }, where: { status: 'FINISHED' } }),
-        this.prisma.fuelRecord.count({ where: { recordedAt: { gte: today } } }),
-      ]);
-
-    return {
+    const [
       totalToday,
       activeNow,
-      incidentsToday,
+      withIncident,
       telegramFailed,
-      avgDuration: Math.round(avgDurationResult._avg.durationMinutes || 0),
-      fuelToday,
+      avgDurationResult,
+      fuelRecordsToday,
+      finishedToday,
+      forcedWeek,
+      vehiclesTotal,
+      vehiclesInUse,
+      weekTrips,
+      activeTrips,
+      weekFuel,
+      weekIncidents,
+    ] = await Promise.all([
+      this.prisma.trip.count({ where: { startedAt: { gte: today } } }),
+      this.prisma.trip.count({ where: { status: { in: ACTIVE_STATUSES } } }),
+      this.prisma.trip.count({ where: { startedAt: { gte: today }, status: 'IN_INCIDENT' } }),
+      this.prisma.trip.count({
+        where: { telegramDeliveryStatus: 'FAILED', startedAt: { gte: today } },
+      }),
+      this.prisma.trip.aggregate({
+        _avg: { durationMinutes: true },
+        where: { startedAt: { gte: today }, status: 'FINISHED' },
+      }),
+      this.prisma.fuelRecord.count({ where: { recordedAt: { gte: today } } }),
+      this.prisma.trip.count({ where: { startedAt: { gte: today }, status: 'FINISHED' } }),
+      this.prisma.trip.count({ where: { startedAt: { gte: weekAgo }, forcedCloseFlag: true } }),
+      this.prisma.vehicle.count({ where: { isActive: true } }),
+      this.prisma.vehicle.count({ where: { isActive: true, currentTripId: { not: null } } }),
+      this.prisma.trip.findMany({
+        where: { startedAt: { gte: weekAgo } },
+        select: { startedAt: true, status: true, driverId: true, driver: { select: { fullName: true } } },
+      }),
+      this.prisma.trip.findMany({
+        where: { status: { in: ACTIVE_STATUSES } },
+        select: {
+          id: true,
+          status: true,
+          startedAt: true,
+          driver: { select: { fullName: true } },
+          vehicle: { select: { plate: true } },
+          destination: { select: { name: true } },
+        },
+        orderBy: { startedAt: 'asc' },
+        take: 20,
+      }),
+      this.prisma.fuelRecord.aggregate({
+        where: { recordedAt: { gte: weekAgo } },
+        _sum: { quantity: true, totalAmount: true },
+        _count: { id: true },
+      }),
+      this.prisma.tripEvent.count({
+        where: { type: 'REPORT_INCIDENT', serverTimestamp: { gte: weekAgo } },
+      }),
+    ]);
+
+    // Bucket the week's trips per day (done in JS: D1/SQLite lacks date_trunc).
+    const trend7d: { date: string; trips: number }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekAgo);
+      d.setDate(d.getDate() + i);
+      trend7d.push({ date: d.toISOString().slice(0, 10), trips: 0 });
+    }
+    const byDriver = new Map<string, { name: string; trips: number }>();
+    for (const t of weekTrips) {
+      const key = new Date(t.startedAt).toISOString().slice(0, 10);
+      const bucket = trend7d.find((b) => b.date === key);
+      if (bucket) bucket.trips++;
+      const entry = byDriver.get(t.driverId) || { name: t.driver?.fullName || '—', trips: 0 };
+      entry.trips++;
+      byDriver.set(t.driverId, entry);
+    }
+    const topDrivers = [...byDriver.values()].sort((a, b) => b.trips - a.trips).slice(0, 5);
+
+    return {
+      // Same keys the original Express dashboard returned (frontend contract).
+      totalToday,
+      activeNow,
+      withIncident,
+      telegramFailed,
+      avgDurationMinutes: Math.round(avgDurationResult._avg.durationMinutes || 0),
+      fuelRecordsToday,
+      // Executive extensions
+      finishedToday,
+      forcedWeek,
+      weekTrips: weekTrips.length,
+      weekIncidents,
+      fleet: { total: vehiclesTotal, inUse: vehiclesInUse },
+      trend7d,
+      topDrivers,
+      activeTrips,
+      fuelWeek: {
+        records: weekFuel._count.id,
+        quantity: Math.round((weekFuel._sum.quantity || 0) * 10) / 10,
+        amount: Math.round((weekFuel._sum.totalAmount || 0) * 100) / 100,
+      },
     };
   }
 }
