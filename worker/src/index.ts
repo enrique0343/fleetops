@@ -17,11 +17,19 @@ import routesRoutes from './routes/routes';
 
 const app = new Hono<AppEnv>();
 
-// CORS (origin configurable via CORS_ORIGIN var)
+// CORS: permite el dominio configurado, cualquier deployment del proyecto
+// Pages (previews con hash, p.ej. abc123.fleetops-frontend.pages.dev) y
+// localhost para desarrollo.
 app.use('*', (c, next) => {
-  const origin = c.env.CORS_ORIGIN || '*';
+  const configured = c.env.CORS_ORIGIN || '';
   return cors({
-    origin,
+    origin: (origin) => {
+      if (!origin) return configured || '*';
+      if (origin === configured) return origin;
+      if (/^https:\/\/([a-z0-9-]+\.)?fleetops-frontend\.pages\.dev$/.test(origin)) return origin;
+      if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return origin;
+      return configured || origin;
+    },
     credentials: true,
     allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'x-seed-token'],
