@@ -11,12 +11,19 @@ import DriverTripPage from './pages/driver/DriverTripPage';
 import DriverFuelPage from './pages/driver/DriverFuelPage';
 import { DriverHistoryPage, DriverProfilePage } from './pages/driver/DriverOtherPages';
 
+// Requester
+import RequesterLayout from './pages/request/RequesterLayout';
+import RequestFormPage from './pages/request/RequestFormPage';
+import MyRequestsPage from './pages/request/MyRequestsPage';
+
 // Admin
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminTripsPage from './pages/admin/AdminTripsPage';
 import AdminTripDetailPage from './pages/admin/AdminTripDetailPage';
 import AdminFuelPage from './pages/admin/AdminFuelPage';
+import AdminRequestsPage from './pages/admin/AdminRequestsPage';
+import AdminRoutesPage from './pages/admin/AdminRoutesPage';
 import {
   AdminUsersPage,
   AdminLocationsPage,
@@ -41,9 +48,17 @@ export default function App() {
             <Route path="profile" element={<DriverProfilePage />} />
           </Route>
 
+          {/* Requester Routes */}
+          <Route path="/request" element={<ProtectedRoute roles={['REQUESTER', 'ADMIN', 'DISPATCHER']}><RequesterLayout /></ProtectedRoute>}>
+            <Route index element={<RequestFormPage />} />
+            <Route path="mine" element={<MyRequestsPage />} />
+          </Route>
+
           {/* Admin Routes */}
           <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminLayout /></ProtectedRoute>}>
             <Route index element={<AdminDashboard />} />
+            <Route path="requests" element={<AdminRequestsPage />} />
+            <Route path="routes" element={<AdminRoutesPage />} />
             <Route path="trips" element={<AdminTripsPage />} />
             <Route path="trips/:tripId" element={<AdminTripDetailPage />} />
             <Route path="fuel" element={<AdminFuelPage />} />

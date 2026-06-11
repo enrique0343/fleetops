@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { AppError } from '../lib/http';
-import { authenticate, requireAdmin } from '../middleware/auth';
+import { authenticate, requireAdmin, requireDispatcher } from '../middleware/auth';
 import { TripService } from '../services/tripService';
 import { notifyTripFinished } from '../services/notification';
 import { requireFields } from '../lib/validate';
@@ -126,7 +126,7 @@ trips.post('/:tripId/finish', authenticate, async (c) => {
 
 // ─── ADMIN ROUTES (must precede '/:tripId' GET) ───
 
-trips.get('/', authenticate, requireAdmin, async (c) => {
+trips.get('/', authenticate, requireDispatcher, async (c) => {
   const q = c.req.query();
   const svc = new TripService(c.get('prisma'));
   const result = await svc.getAdminTrips({
@@ -143,7 +143,7 @@ trips.get('/', authenticate, requireAdmin, async (c) => {
   return c.json({ success: true, data: result });
 });
 
-trips.get('/admin/dashboard', authenticate, requireAdmin, async (c) => {
+trips.get('/admin/dashboard', authenticate, requireDispatcher, async (c) => {
   const svc = new TripService(c.get('prisma'));
   const stats = await svc.getDashboardStats();
   return c.json({ success: true, data: stats });

@@ -395,7 +395,7 @@ export function AdminVehiclesPage() {
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const emptyForm = { plate: '', model: '', brand: '', year: '', vehicleType: '', branchId: '', fuelType: '', color: '', isActive: true };
+  const emptyForm = { plate: '', model: '', brand: '', year: '', vehicleType: '', branchId: '', fuelType: '', color: '', isActive: true, isAmbulance: false, hasStretcher: false, hasOxygen: false };
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
@@ -409,7 +409,7 @@ export function AdminVehiclesPage() {
   const openCreate = () => { setEditVehicle(null); setForm(emptyForm); setShowModal(true); };
   const openEdit = (v: Vehicle) => {
     setEditVehicle(v);
-    setForm({ plate: v.plate, model: v.model, brand: v.brand, year: v.year?.toString() || '', vehicleType: v.vehicleType || '', branchId: v.branchId || '', fuelType: v.fuelType || '', color: v.color || '', isActive: v.isActive });
+    setForm({ plate: v.plate, model: v.model, brand: v.brand, year: v.year?.toString() || '', vehicleType: v.vehicleType || '', branchId: v.branchId || '', fuelType: v.fuelType || '', color: v.color || '', isActive: v.isActive, isAmbulance: v.isAmbulance ?? false, hasStretcher: v.hasStretcher ?? false, hasOxygen: v.hasOxygen ?? false });
     setShowModal(true);
   };
 
@@ -417,7 +417,7 @@ export function AdminVehiclesPage() {
     setSaving(true);
     setError('');
     try {
-      const data = { ...form, year: form.year ? parseInt(form.year) : null, branchId: form.branchId || null, reason: 'Edición desde admin' };
+      const data = { ...form, year: form.year ? parseInt(form.year) : null, branchId: form.branchId || null, serviceClass: form.isAmbulance ? 'AMBULANCE' : 'ADMIN', reason: 'Edición desde admin' };
       if (editVehicle) await api.patch(`/catalogs/vehicles/${editVehicle.id}`, data);
       else await api.post('/catalogs/vehicles', data);
       setSuccess(editVehicle ? 'Vehículo actualizado' : 'Vehículo creado');
@@ -450,6 +450,9 @@ export function AdminVehiclesPage() {
               <button onClick={() => openEdit(v)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-4 h-4" /></button>
             </div>
             <div className="mt-2 flex gap-2 flex-wrap">
+              {v.isAmbulance && <span className="text-xs bg-red-900/40 text-red-300 px-2 py-0.5 rounded">🚑 Ambulancia</span>}
+              {v.hasStretcher && <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">Camilla</span>}
+              {v.hasOxygen && <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">O₂</span>}
               {v.vehicleType && <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">{v.vehicleType}</span>}
               {v.fuelType && <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">{v.fuelType}</span>}
               {v.currentTripId && <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded">En uso</span>}
@@ -473,6 +476,25 @@ export function AdminVehiclesPage() {
           </div>
           <Select label="Tipo de combustible" value={form.fuelType} onChange={e => setForm(p => ({ ...p, fuelType: e.target.value }))} placeholder="Seleccionar..." options={[{ value: 'Gasolina', label: 'Gasolina' }, { value: 'Diesel', label: 'Diesel' }, { value: 'Gas LP', label: 'Gas LP' }]} />
           <Select label="Sucursal" value={form.branchId} onChange={e => setForm(p => ({ ...p, branchId: e.target.value }))} placeholder="Sin sucursal" options={branches.map(b => ({ value: b.id, label: b.name }))} />
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-3 space-y-2">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Capacidades de ambulancia</p>
+            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={form.isAmbulance} onChange={e => setForm(p => ({ ...p, isAmbulance: e.target.checked }))} className="accent-red-500" />
+              Es ambulancia (elegible para traslados de paciente)
+            </label>
+            {form.isAmbulance && (
+              <div className="flex gap-4 pl-6">
+                <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked={form.hasStretcher} onChange={e => setForm(p => ({ ...p, hasStretcher: e.target.checked }))} className="accent-blue-500" />
+                  Camilla
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked={form.hasOxygen} onChange={e => setForm(p => ({ ...p, hasOxygen: e.target.checked }))} className="accent-blue-500" />
+                  Oxígeno
+                </label>
+              </div>
+            )}
+          </div>
           {editVehicle && (
             <div className="flex items-center gap-3">
               <input type="checkbox" checked={form.isActive} onChange={e => setForm(p => ({ ...p, isActive: e.target.checked }))} className="accent-blue-500" id="vActive" />
