@@ -9,6 +9,8 @@ import { parseVehicleQr } from '../../components/vehicleQr';
 const QrScanner = lazy(() =>
   import('../../components/QrScanner').then((m) => ({ default: m.QrScanner }))
 );
+// Mapa del recorrido (Leaflet): se carga solo si el conductor lo abre.
+const TripMap = lazy(() => import('../../components/TripMap'));
 import {
   Play, Square, MapPin, AlertTriangle, Navigation,
   Truck, Building2, CheckCircle2, History, Timer, ScanLine,
@@ -98,6 +100,20 @@ export default function DriverTripPage() {
   const [finishComment, setFinishComment] = useState('');
 
   const elapsed = useElapsed(phase === 'active' ? activeTrip?.startedAt : undefined);
+
+  // Mapa del recorrido del conductor (cerrado por defecto para ahorrar datos).
+  const [showMap, setShowMap] = useState(false);
+  const [track, setTrack] = useState<{ lat: number; lng: number }[]>([]);
+  useEffect(() => {
+    if (!showMap || phase !== 'active' || !activeTrip) return;
+    const load = () =>
+      api.get(`/trips/${activeTrip.id}/track`)
+        .then((r) => setTrack(r.data.data || []))
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 60_000);
+    return () => clearInterval(id);
+  }, [showMap, phase, activeTrip?.id]);
 
   // Rastreo en vivo: mientras el viaje está activo, reporta la posición cada
   // 60s para que el administrador pueda ver al conductor en el mapa.
@@ -590,6 +606,40 @@ export default function DriverTripPage() {
                 : '—'}
               {activeTrip.comment && <span className="truncate"> · {activeTrip.comment}</span>}
             </div>
+          </div>
+
+          {/* Mi recorrido (trazabilidad visual del conductor) */}
+          <div>
+            <button
+              onClick={() => setShowMap((v) => !v)}
+              className="w-full flex items-center justify-center gap-2 text-sm text-slate-300 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 hover:border-slate-500 transition-colors"
+            >
+              <MapPin className="w-4 h-4 text-blue-400" />
+              {showMap ? 'Ocultar mi recorrido' : 'Ver mi recorrido'}
+            </button>
+            {showMap && (
+              <div className="mt-3">
+                <Suspense fallback={<div className="w-full h-72 rounded-2xl bg-slate-800 animate-pulse" />}>
+                  <TripMap
+                    path={track}
+                    points={[
+                      activeTrip.startLat != null && activeTrip.startLng != null
+                        ? { lat: activeTrip.startLat, lng: activeTrip.startLng, label: '🚀 Inicio', kind: 'start' as const }
+                        : null,
+                      activeTrip.lastLat != null && activeTrip.lastLng != null
+                        ? { lat: activeTrip.lastLat, lng: activeTrip.lastLng, label: '🚛 Tú estás aquí', kind: 'last' as const }
+                        : null,
+                      ...(track.length > 0 && activeTrip.lastLat == null
+                        ? [{ lat: track[track.length - 1].lat, lng: track[track.length - 1].lng, label: '🚛 Tú estás aquí', kind: 'last' as const }]
+                        : []),
+                    ].filter((p): p is NonNullable<typeof p> => p !== null)}
+                  />
+                </Suspense>
+                <p className="text-xs text-slate-500 text-center mt-2">
+                  La línea azul es tu trayecto reportado · se actualiza cada minuto
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Acciones grandes según estado */}

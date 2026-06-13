@@ -9,9 +9,9 @@ export interface TripMapPoint {
   kind: 'start' | 'last' | 'end';
 }
 
-// Mapa OSM (gratuito) con la posición del conductor y los puntos del viaje.
-// Se carga lazy para no llevar Leaflet al bundle principal.
-export default function TripMap({ points }: { points: TripMapPoint[] }) {
+// Mapa OSM (gratuito) con la posición del conductor, los puntos del viaje y
+// la línea del recorrido real (breadcrumbs). Lazy para no inflar el bundle.
+export default function TripMap({ points, path = [] }: { points: TripMapPoint[]; path?: { lat: number; lng: number }[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
 
@@ -27,10 +27,21 @@ export default function TripMap({ points }: { points: TripMapPoint[] }) {
     }
     const map = mapRef.current;
 
-    // Limpiar marcadores previos (refresh)
+    // Limpiar marcadores y trazos previos (refresh)
     map.eachLayer((layer) => {
-      if (layer instanceof L.Marker || layer instanceof L.CircleMarker) map.removeLayer(layer);
+      if (layer instanceof L.Marker || layer instanceof L.CircleMarker || layer instanceof L.Polyline) {
+        map.removeLayer(layer);
+      }
     });
+
+    // Línea del recorrido real
+    if (path.length >= 2) {
+      L.polyline(path.map((p) => [p.lat, p.lng] as [number, number]), {
+        color: '#3b82f6',
+        weight: 4,
+        opacity: 0.75,
+      }).addTo(map);
+    }
 
     const colors: Record<TripMapPoint['kind'], string> = {
       start: '#10b981', // verde: inicio
@@ -50,9 +61,13 @@ export default function TripMap({ points }: { points: TripMapPoint[] }) {
       if (p.kind === 'last') marker.openPopup();
     }
 
-    const bounds = L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number]));
+    const all = [
+      ...points.map((p) => [p.lat, p.lng] as [number, number]),
+      ...path.map((p) => [p.lat, p.lng] as [number, number]),
+    ];
+    const bounds = L.latLngBounds(all);
     map.fitBounds(bounds.pad(0.3), { maxZoom: 15 });
-  }, [points]);
+  }, [points, path]);
 
   useEffect(() => () => { mapRef.current?.remove(); mapRef.current = null; }, []);
 

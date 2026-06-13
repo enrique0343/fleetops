@@ -122,11 +122,40 @@ trips.post('/:tripId/ping', authenticate, async (c) => {
   if (!['IN_TRANSIT', 'IN_STOP', 'IN_INCIDENT'].includes(trip.status)) {
     throw new AppError('El viaje no está activo', 400);
   }
-  await prisma.trip.update({
-    where: { id: trip.id },
-    data: { lastLat: lat, lastLng: lng, lastPingAt: new Date() },
-  });
+  // Actualiza la última posición Y guarda el punto del recorrido (breadcrumb)
+  // para poder dibujar la ruta real recorrida.
+  await prisma.$transaction([
+    prisma.trip.update({
+      where: { id: trip.id },
+      data: { lastLat: lat, lastLng: lng, lastPingAt: new Date() },
+    }),
+    prisma.tripTrackPoint.create({
+      data: { tripId: trip.id, lat, lng },
+    }),
+  ]);
   return c.json({ success: true });
+});
+
+// Recorrido completo del viaje (para el mapa). Lo ve el conductor dueño
+// del viaje y el personal de coordinación.
+trips.get('/:tripId/track', authenticate, async (c) => {
+  const prisma = c.get('prisma');
+  const trip = await prisma.trip.findUnique({
+    where: { id: c.req.param('tripId') },
+    select: { id: true, driverId: true },
+  });
+  if (!trip) throw new AppError('Viaje no encontrado', 404);
+  const user = c.get('user');
+  if (trip.driverId !== user.userId && !['ADMIN', 'DISPATCHER'].includes(user.role)) {
+    throw new AppError('No tienes permiso para ver este recorrido', 403);
+  }
+  const points = await prisma.tripTrackPoint.findMany({
+    where: { tripId: trip.id },
+    select: { lat: true, lng: true, recordedAt: true },
+    orderBy: { recordedAt: 'asc' },
+    take: 2000,
+  });
+  return c.json({ success: true, data: points });
 });
 
 trips.post('/:tripId/finish', authenticate, async (c) => {

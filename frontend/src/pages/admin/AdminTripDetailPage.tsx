@@ -60,10 +60,16 @@ export default function AdminTripDetailPage() {
   const [corrComment, setCorrComment] = useState('');
   const [actionLoading, setActionLoading] = useState('');
 
+  const [track, setTrack] = useState<{ lat: number; lng: number }[]>([]);
+
   const loadTrip = async () => {
     try {
       const res = await api.get(`/trips/${tripId}`);
       setTrip(res.data.data);
+      // Recorrido real (breadcrumbs) para dibujar la línea en el mapa.
+      api.get(`/trips/${tripId}/track`)
+        .then((t) => setTrack(t.data.data || []))
+        .catch(() => { /* sin track: el mapa muestra solo marcadores */ });
     } catch {
       setError('No se pudo cargar el viaje');
     } finally {
@@ -287,6 +293,7 @@ export default function AdminTripDetailPage() {
           </div>
           <Suspense fallback={<div className="w-full h-72 rounded-2xl bg-slate-700 animate-pulse" />}>
             <TripMap
+              path={track}
               points={[
                 trip.startLat != null && trip.startLng != null
                   ? { lat: trip.startLat, lng: trip.startLng, label: '🚀 Inicio del viaje', kind: 'start' as const }
