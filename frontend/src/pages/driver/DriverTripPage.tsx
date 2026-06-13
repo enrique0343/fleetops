@@ -117,6 +117,8 @@ export default function DriverTripPage() {
   // y manipulación manual). Lo mismo para la sucursal de llegada al finalizar.
   const [autoBranch, setAutoBranch] = useState<{ name: string; km: number } | null>(null);
   const [autoFinishBranch, setAutoFinishBranch] = useState<{ name: string; km: number } | null>(null);
+  const [originManual, setOriginManual] = useState(false);
+  const branchHasCoords = branches.some((b) => b.lat != null && b.lng != null);
 
   const nearestBranch = useCallback((lat: number, lng: number) => {
     let best: Branch | null = null;
@@ -424,6 +426,7 @@ export default function DriverTripPage() {
       setVehicleId('');
       setScannedVehicle(null);
       setVerifyMethod(null);
+      setOriginManual(false);
       setDestinationId('');
       setTripComment('');
       setFinishBranchId('');
@@ -535,14 +538,37 @@ export default function DriverTripPage() {
 
           <Card>
             <div className="space-y-4">
-              <Select
-                label="Sucursal de origen"
-                value={originBranchId}
-                onChange={(e) => { setOriginBranchId(e.target.value); setAutoBranch(null); }}
-                placeholder="Seleccionar sucursal..."
-                options={branches.map((b) => ({ value: b.id, label: b.name }))}
-                hint={autoBranch ? `📍 ${autoBranch.name} detectada por tu ubicación (a ${autoBranch.km} km)` : undefined}
-              />
+              {/* Sucursal de origen: detectada por GPS, no se elige a mano */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">Sucursal de origen</label>
+                {autoBranch && !originManual ? (
+                  <div className="flex items-center gap-3 bg-emerald-950/40 border border-emerald-800/50 rounded-xl px-4 py-3">
+                    <MapPin className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-white font-medium">{autoBranch.name}</p>
+                      <p className="text-xs text-emerald-300/80">Detectada por tu ubicación · a {autoBranch.km} km</p>
+                    </div>
+                    <button onClick={() => setOriginManual(true)}
+                      className="text-xs text-slate-300 hover:text-white bg-slate-700/60 rounded-lg px-2.5 py-1.5">
+                      Cambiar
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Select
+                      value={originBranchId}
+                      onChange={(e) => { setOriginBranchId(e.target.value); setAutoBranch(null); }}
+                      placeholder="Seleccionar sucursal..."
+                      options={branches.map((b) => ({ value: b.id, label: b.name }))}
+                    />
+                    <p className="text-xs text-slate-500 mt-1.5">
+                      {branchHasCoords
+                        ? 'Activa la ubicación para detectar tu sucursal automáticamente.'
+                        : 'Configura las coordenadas de las sucursales (admin) para detección automática.'}
+                    </p>
+                  </>
+                )}
+              </div>
 
               {/* Vehículo por escaneo de QR (evita elegir la unidad equivocada) */}
               <div>
