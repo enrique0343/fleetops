@@ -179,6 +179,7 @@ model Trip {
   startLng Float? @map("start_lng")
   endLat   Float? @map("end_lat")
   endLng   Float? @map("end_lng")
+  endPlace String? @map("end_place") // nombre del lugar de llegada (reverse geocoding)
 
   // Última posición reportada por el conductor (ping periódico durante el viaje)
   lastLat    Float?    @map("last_lat")

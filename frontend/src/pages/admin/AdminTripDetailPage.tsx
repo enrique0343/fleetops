@@ -255,7 +255,8 @@ export default function AdminTripDetailPage() {
             value={trip.finishedAt ? format(new Date(trip.finishedAt), 'dd/MM/yyyy HH:mm:ss', { locale: es }) : '—'}
           />
           <DataField label="Duración" value={trip.durationMinutes ? `${trip.durationMinutes} minutos` : '—'} />
-          <DataField label="Sucursal de cierre" value={trip.closureBranch?.name || '—'} />
+          <DataField label="Lugar de llegada (GPS)" value={trip.endPlace || (trip.endLat != null ? '📍 Punto GPS' : '—')} className="col-span-2" />
+          {trip.closureBranch?.name && <DataField label="Sucursal de cierre" value={trip.closureBranch.name} />}
           {trip.comment && <DataField label="Comentario" value={trip.comment} className="col-span-2" />}
         </div>
 

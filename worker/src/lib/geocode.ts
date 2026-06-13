@@ -73,3 +73,33 @@ export async function geocodeBest(env: Bindings, q: string): Promise<GeoResult |
   const results = await geocodeSearch(env, q.trim());
   return results[0] || null;
 }
+
+// Reverse geocoding: nombre del lugar más cercano a unas coordenadas.
+export async function reverseGeocode(env: Bindings, lat: number, lng: number): Promise<string | null> {
+  const provider = activeProvider(env);
+  try {
+    if (provider === 'google') {
+      const url =
+        `https://maps.googleapis.com/maps/api/geocode/json?language=es&latlng=${lat},${lng}&key=${env.GOOGLE_MAPS_API_KEY}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data: any = await res.json();
+      return data.results?.[0]?.formatted_address || null;
+    }
+    if (provider === 'mapbox') {
+      const url =
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?language=es&access_token=${env.MAPBOX_TOKEN}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data: any = await res.json();
+      return data.features?.[0]?.place_name || null;
+    }
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'FleetOps/1.0 (fleet management app)' } });
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    return data.display_name || null;
+  } catch {
+    return null;
+  }
+}

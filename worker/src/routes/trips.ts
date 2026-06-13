@@ -5,6 +5,7 @@ import { authenticate, requireAdmin, requireDispatcher } from '../middleware/aut
 import { TripService } from '../services/tripService';
 import { notifyTripFinished } from '../services/notification';
 import { requireFields } from '../lib/validate';
+import { reverseGeocode } from '../lib/geocode';
 
 const trips = new Hono<AppEnv>();
 
@@ -177,11 +178,19 @@ trips.post('/:tripId/finish', authenticate, async (c) => {
     deviceTimestamp: dt(body.deviceTimestamp),
   });
 
-  // Fire notification without blocking the response.
+  // Resuelve el nombre del lugar de llegada (reverse geocoding) en segundo
+  // plano: el punto final es el GPS; aquí solo le ponemos un nombre legible.
   c.executionCtx.waitUntil(
-    notifyTripFinished(c.get('prisma'), c.env, trip.id).catch((err) =>
-      console.error('Notification error:', err)
-    )
+    (async () => {
+      const prisma = c.get('prisma');
+      if (trip.endLat != null && trip.endLng != null) {
+        const place = await reverseGeocode(c.env, trip.endLat, trip.endLng).catch(() => null);
+        if (place) await prisma.trip.update({ where: { id: trip.id }, data: { endPlace: place } });
+      }
+      await notifyTripFinished(prisma, c.env, trip.id).catch((err) =>
+        console.error('Notification error:', err)
+      );
+    })()
   );
 
   return c.json({ success: true, data: trip });

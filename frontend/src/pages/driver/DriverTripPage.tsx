@@ -790,14 +790,11 @@ export default function DriverTripPage() {
         <div className="space-y-4">
           <Alert type="info" message="Al finalizar el viaje se enviará notificación automática." />
 
-          <Select
-            label="Sucursal de llegada (opcional)"
-            value={finishBranchId}
-            onChange={(e) => setFinishBranchId(e.target.value)}
-            placeholder="Seleccionar sucursal de llegada..."
-            options={branches.map((b) => ({ value: b.id, label: b.name }))}
-            hint="Opcional. El punto de llegada se registra con tu ubicación al finalizar."
-          />
+          {/* El punto de llegada es el GPS: no se elige sucursal a mano. */}
+          <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2.5">
+            <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
+            El punto de llegada se registra automáticamente con tu ubicación actual.
+          </div>
 
           <Textarea
             label="Comentario final (opcional)"

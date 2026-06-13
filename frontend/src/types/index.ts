@@ -133,6 +133,7 @@ export interface Trip {
   lastLat?: number | null;
   lastLng?: number | null;
   lastPingAt?: string | null;
+  endPlace?: string | null;
   comment?: string;
   correctionFlag: boolean;
   forcedCloseFlag: boolean;
