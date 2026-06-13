@@ -109,7 +109,9 @@ export function AddressSearch({ label = 'Dirección', placeholder = 'Buscar dire
       )}
 
       {open && !searching && query.trim().length >= 3 && results.length === 0 && (
-        <p className="text-xs text-slate-500 mt-1.5">Sin resultados. Intenta con más detalle (ciudad, avenida…).</p>
+        <p className="text-xs text-slate-500 mt-1.5">
+          Sin resultados. Intenta con más detalle (municipio, colonia, punto de referencia…).
+        </p>
       )}
     </div>
   );
