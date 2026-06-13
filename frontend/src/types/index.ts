@@ -50,6 +50,8 @@ export interface Branch {
   name: string;
   code: string;
   address?: string;
+  lat?: number | null;
+  lng?: number | null;
   isActive: boolean;
   createdAt: string;
 }

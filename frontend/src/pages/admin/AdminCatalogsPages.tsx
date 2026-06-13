@@ -576,7 +576,7 @@ export function AdminBranchesPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', address: '', isActive: true });
+  const [form, setForm] = useState({ name: '', code: '', address: '', lat: '', lng: '', isActive: true });
 
   const load = async () => {
     const res = await api.get('/catalogs/branches');
@@ -585,15 +585,16 @@ export function AdminBranchesPage() {
 
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => { setEditBranch(null); setForm({ name: '', code: '', address: '', isActive: true }); setShowModal(true); };
-  const openEdit = (b: Branch) => { setEditBranch(b); setForm({ name: b.name, code: b.code, address: b.address || '', isActive: b.isActive }); setShowModal(true); };
+  const openCreate = () => { setEditBranch(null); setForm({ name: '', code: '', address: '', lat: '', lng: '', isActive: true }); setShowModal(true); };
+  const openEdit = (b: Branch) => { setEditBranch(b); setForm({ name: b.name, code: b.code, address: b.address || '', lat: b.lat != null ? String(b.lat) : '', lng: b.lng != null ? String(b.lng) : '', isActive: b.isActive }); setShowModal(true); };
 
   const handleSave = async () => {
     setSaving(true);
     setError('');
     try {
-      if (editBranch) await api.patch(`/catalogs/branches/${editBranch.id}`, form);
-      else await api.post('/catalogs/branches', form);
+      const payload = { ...form, lat: form.lat ? Number(form.lat) : null, lng: form.lng ? Number(form.lng) : null };
+      if (editBranch) await api.patch(`/catalogs/branches/${editBranch.id}`, payload);
+      else await api.post('/catalogs/branches', payload);
       setSuccess(editBranch ? 'Sucursal actualizada' : 'Sucursal creada');
       setShowModal(false);
       await load();
@@ -631,6 +632,14 @@ export function AdminBranchesPage() {
           <Input label="Nombre *" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
           <Input label="Código (único) *" value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} disabled={!!editBranch} />
           <Input label="Dirección" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
+          <AddressSearch
+            label="Ubicación en el mapa (para autodetección por GPS)"
+            placeholder="Buscar la dirección de la sucursal…"
+            value={form.lat && form.lng ? { name: form.address || 'Coordenadas fijadas', lat: Number(form.lat), lng: Number(form.lng) } : null}
+            onChange={(r) => setForm(p => r
+              ? { ...p, lat: String(r.lat), lng: String(r.lng), address: p.address || r.name }
+              : { ...p, lat: '', lng: '' })}
+          />
           {editBranch && (
             <div className="flex items-center gap-3">
               <input type="checkbox" checked={form.isActive} onChange={e => setForm(p => ({ ...p, isActive: e.target.checked }))} className="accent-blue-500" id="brActive" />

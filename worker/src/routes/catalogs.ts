@@ -29,7 +29,13 @@ catalogs.post('/branches', authenticate, requireAdmin, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   requireFields(body, ['name', 'code']);
   const branch = await c.get('prisma').branch.create({
-    data: { name: body.name, code: body.code, address: body.address },
+    data: {
+      name: body.name,
+      code: body.code,
+      address: body.address,
+      lat: body.lat != null ? Number(body.lat) : null,
+      lng: body.lng != null ? Number(body.lng) : null,
+    },
   });
   return c.json({ success: true, data: branch }, 201);
 });
@@ -38,7 +44,14 @@ catalogs.patch('/branches/:id', authenticate, requireAdmin, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const branch = await c.get('prisma').branch.update({
     where: { id: c.req.param('id') },
-    data: { name: body.name, code: body.code, address: body.address, isActive: body.isActive },
+    data: {
+      name: body.name,
+      code: body.code,
+      address: body.address,
+      lat: body.lat !== undefined ? (body.lat != null ? Number(body.lat) : null) : undefined,
+      lng: body.lng !== undefined ? (body.lng != null ? Number(body.lng) : null) : undefined,
+      isActive: body.isActive,
+    },
   });
   return c.json({ success: true, data: branch });
 });

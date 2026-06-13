@@ -44,6 +44,17 @@ const statusHero: Record<string, { label: string; sub: string; classes: string; 
   },
 };
 
+// Distancia great-circle en km (para detectar la sucursal más cercana al GPS).
+function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLng = ((bLng - aLng) * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLng / 2) ** 2 * Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180);
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
 function useElapsed(startedAt?: string) {
   const [, force] = useState(0);
   useEffect(() => {
@@ -100,6 +111,53 @@ export default function DriverTripPage() {
   const [finishComment, setFinishComment] = useState('');
 
   const elapsed = useElapsed(phase === 'active' ? activeTrip?.startedAt : undefined);
+
+  // Autodetección de sucursal por GPS: al preparar el viaje, se selecciona
+  // sola la sucursal más cercana a la posición del conductor (evita errores
+  // y manipulación manual). Lo mismo para la sucursal de llegada al finalizar.
+  const [autoBranch, setAutoBranch] = useState<{ name: string; km: number } | null>(null);
+  const [autoFinishBranch, setAutoFinishBranch] = useState<{ name: string; km: number } | null>(null);
+
+  const nearestBranch = useCallback((lat: number, lng: number) => {
+    let best: Branch | null = null;
+    let bestKm = Infinity;
+    for (const b of branches) {
+      if (b.lat == null || b.lng == null) continue;
+      const d = distanceKm(lat, lng, b.lat, b.lng);
+      if (d < bestKm) { bestKm = d; best = b; }
+    }
+    return best ? { branch: best, km: Math.round(bestKm * 10) / 10 } : null;
+  }, [branches]);
+
+  useEffect(() => {
+    if (phase !== 'setup' || branches.length === 0 || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const hit = nearestBranch(pos.coords.latitude, pos.coords.longitude);
+        if (hit) {
+          setOriginBranchId(hit.branch.id);
+          setAutoBranch({ name: hit.branch.name, km: hit.km });
+        }
+      },
+      () => { /* sin GPS: queda la selección manual */ },
+      { timeout: 8000, maximumAge: 60000 }
+    );
+  }, [phase, branches, nearestBranch]);
+
+  useEffect(() => {
+    if (!finishModal || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const hit = nearestBranch(pos.coords.latitude, pos.coords.longitude);
+        if (hit) {
+          setFinishBranchId(hit.branch.id);
+          setAutoFinishBranch({ name: hit.branch.name, km: hit.km });
+        }
+      },
+      () => {},
+      { timeout: 8000, maximumAge: 30000 }
+    );
+  }, [finishModal, nearestBranch]);
 
   // Mapa del recorrido del conductor (cerrado por defecto para ahorrar datos).
   const [showMap, setShowMap] = useState(false);
@@ -480,9 +538,10 @@ export default function DriverTripPage() {
               <Select
                 label="Sucursal de origen"
                 value={originBranchId}
-                onChange={(e) => setOriginBranchId(e.target.value)}
+                onChange={(e) => { setOriginBranchId(e.target.value); setAutoBranch(null); }}
                 placeholder="Seleccionar sucursal..."
                 options={branches.map((b) => ({ value: b.id, label: b.name }))}
+                hint={autoBranch ? `📍 ${autoBranch.name} detectada por tu ubicación (a ${autoBranch.km} km)` : undefined}
               />
 
               {/* Vehículo por escaneo de QR (evita elegir la unidad equivocada) */}
@@ -798,9 +857,10 @@ export default function DriverTripPage() {
           <Select
             label="Sucursal de llegada (opcional)"
             value={finishBranchId}
-            onChange={(e) => setFinishBranchId(e.target.value)}
+            onChange={(e) => { setFinishBranchId(e.target.value); setAutoFinishBranch(null); }}
             placeholder="Seleccionar sucursal de llegada..."
             options={branches.map((b) => ({ value: b.id, label: b.name }))}
+            hint={autoFinishBranch ? `📍 ${autoFinishBranch.name} detectada por tu ubicación (a ${autoFinishBranch.km} km)` : undefined}
           />
 
           <Textarea
