@@ -302,6 +302,7 @@ model TransportRequest {
   // Requester
   requesterId    String? @map("requester_id")
   requesterName  String  @map("requester_name")
+  requesterEmail String? @map("requester_email")
   requesterPhone String? @map("requester_phone")
   requesterDept  String? @map("requester_dept")
 

@@ -199,6 +199,7 @@ export interface TransportRequest {
   status: RequestStatus;
   requesterId?: string;
   requesterName: string;
+  requesterEmail?: string;
   requesterPhone?: string;
   requesterDept?: string;
   originId: string;

@@ -22,6 +22,7 @@ interface CreateRequestInput {
   priority?: string;
   requesterId?: string;
   requesterName: string;
+  requesterEmail?: string;
   requesterPhone?: string;
   requesterDept?: string;
   originId: string;
@@ -69,6 +70,7 @@ export class RequestService {
           status: 'PENDING',
           requesterId: input.requesterId,
           requesterName: input.requesterName,
+          requesterEmail: input.requesterEmail,
           requesterPhone: input.requesterPhone,
           requesterDept: input.requesterDept,
           originId: input.originId,

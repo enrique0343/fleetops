@@ -18,6 +18,7 @@ export interface Bindings {
   TELEGRAM_CHAT_ID?: string;
   SEED_TOKEN?: string;
   OSRM_URL?: string; // optional free OSM routing engine for multi-stop optimization
+  PUBLIC_FORM_TOKEN?: string; // token del enlace público de solicitudes
 }
 
 export interface Variables {

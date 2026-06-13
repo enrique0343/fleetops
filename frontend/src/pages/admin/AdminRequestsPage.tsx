@@ -115,6 +115,7 @@ export default function AdminRequestsPage() {
                       <Clock className="w-3 h-3" />{format(new Date(r.scheduledAt), "d MMM HH:mm", { locale: es })}
                     </span>
                     <span>👤 {r.requesterName}</span>
+                    {r.requesterEmail && <span className="text-slate-400">✉️ {r.requesterEmail}</span>}
                     {r.serviceType === 'AMBULANCE' && r.patientName && (
                       <span className="flex items-center gap-1 text-slate-400">
                         <Stethoscope className="w-3 h-3" />{r.patientName}

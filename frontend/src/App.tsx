@@ -5,6 +5,9 @@ import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 // Auth
 import LoginPage from './pages/auth/LoginPage';
 
+// Public (sin login)
+import PublicRequestPage from './pages/public/PublicRequestPage';
+
 // Driver
 import DriverLayout from './pages/driver/DriverLayout';
 import DriverTripPage from './pages/driver/DriverTripPage';
@@ -41,6 +44,9 @@ export default function App() {
         <Routes>
           {/* Public */}
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+
+          {/* Formulario público de solicitudes (sin cuenta, vía enlace con token) */}
+          <Route path="/solicitar/:token" element={<PublicRequestPage />} />
 
           {/* Driver Routes */}
           <Route path="/driver" element={<ProtectedRoute><DriverLayout /></ProtectedRoute>}>
