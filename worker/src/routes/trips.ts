@@ -122,12 +122,19 @@ trips.post('/:tripId/ping', authenticate, async (c) => {
   if (!['IN_TRANSIT', 'IN_STOP', 'IN_INCIDENT'].includes(trip.status)) {
     throw new AppError('El viaje no está activo', 400);
   }
-  // Actualiza la última posición Y guarda el punto del recorrido (breadcrumb)
-  // para poder dibujar la ruta real recorrida.
+  // Actualiza la última posición Y guarda el punto del recorrido (breadcrumb).
+  // Si el viaje no tiene punto de inicio (GPS falló al arrancar), el primer
+  // ping lo fija automáticamente: el inicio lo determina el rastreo, no un
+  // dato editable por el conductor.
   await prisma.$transaction([
     prisma.trip.update({
       where: { id: trip.id },
-      data: { lastLat: lat, lastLng: lng, lastPingAt: new Date() },
+      data: {
+        lastLat: lat,
+        lastLng: lng,
+        lastPingAt: new Date(),
+        ...(trip.startLat == null ? { startLat: lat, startLng: lng } : {}),
+      },
     }),
     prisma.tripTrackPoint.create({
       data: { tripId: trip.id, lat, lng },

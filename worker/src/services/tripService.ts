@@ -215,8 +215,10 @@ export class TripService {
           closureType: 'NORMAL',
           finishedAt,
           durationMinutes,
-          endLat: input.endLat,
-          endLng: input.endLng,
+          // El punto de cierre se respalda con la última posición rastreada:
+          // si el dispositivo no envía GPS al finalizar, manda el rastreo.
+          endLat: input.endLat ?? trip.lastLat,
+          endLng: input.endLng ?? trip.lastLng,
           closureBranchId: input.closureBranchId,
           comment: input.comment || trip.comment,
         },
@@ -356,6 +358,9 @@ export class TripService {
           forcedCloseFlag: true,
           finishedAt,
           durationMinutes,
+          // Cierre forzado: el punto final queda en la última posición rastreada.
+          endLat: trip.lastLat,
+          endLng: trip.lastLng,
           closureBranchId,
           comment: reason,
         },
