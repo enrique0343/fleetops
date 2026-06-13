@@ -159,7 +159,7 @@ export default function DriverTripPage() {
       const [brRes, vRes, lRes, iRes] = await Promise.all([
         api.get('/catalogs/branches'),
         api.get('/catalogs/vehicles?available=true'),
-        api.get('/catalogs/locations?type=DESTINATION'),
+        api.get('/catalogs/locations'),
         api.get('/catalogs/incident-types'),
       ]);
 
@@ -526,8 +526,12 @@ export default function DriverTripPage() {
                 label="Destino"
                 value={destinationId}
                 onChange={(e) => setDestinationId(e.target.value)}
-                placeholder="Seleccionar destino..."
-                options={locations.map((l) => ({ value: l.id, label: l.name }))}
+                placeholder="Seleccionar ubicación de destino..."
+                options={locations.map((l) => ({
+                  value: l.id,
+                  label: l.branch?.name ? `${l.name} (${l.branch.name})` : l.name,
+                }))}
+                hint={locations.length === 0 ? 'No hay ubicaciones. Configúralas en el panel admin.' : undefined}
               />
 
               <Textarea
