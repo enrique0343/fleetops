@@ -2,7 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import api, { getErrorMessage } from '../../services/api';
 import { User, Vehicle, Branch, Location } from '../../types';
 import { Button, Input, Select, Card, Alert, Modal, Textarea, StatusBadge } from '../../components/ui';
-import { Plus, Pencil, ToggleLeft, ToggleRight, QrCode, Camera } from 'lucide-react';
+import { Plus, Pencil, ToggleLeft, ToggleRight, QrCode, Camera, MapPin } from 'lucide-react';
 import { resizeImageToDataUrl } from '../../lib/image';
 import { AddressSearch } from '../../components/AddressSearch';
 import { format } from 'date-fns';
@@ -576,6 +576,7 @@ export function AdminBranchesPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
   const [form, setForm] = useState({ name: '', code: '', address: '', lat: '', lng: '', isActive: true });
 
   const load = async () => {
@@ -605,9 +606,25 @@ export function AdminBranchesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-3 flex-wrap">
         <div><h1 className="text-2xl font-bold text-white">Sucursales</h1></div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>Nueva sucursal</Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" icon={<MapPin className="w-4 h-4" />} loading={geocoding}
+            onClick={async () => {
+              setGeocoding(true); setError('');
+              try {
+                const r = await api.post('/catalogs/branches/geocode-all', {});
+                const d = r.data.data;
+                setSuccess(`Coordenadas resueltas: ${d.updated}/${d.total}${d.failed.length ? ` · sin resultado: ${d.failed.join(', ')}` : ''}`);
+                await load();
+                setTimeout(() => setSuccess(''), 6000);
+              } catch (err) { setError(getErrorMessage(err)); }
+              finally { setGeocoding(false); }
+            }}>
+            Autocompletar coordenadas
+          </Button>
+          <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>Nueva sucursal</Button>
+        </div>
       </div>
       {success && <Alert type="success" message={success} />}
       {error && <Alert type="error" message={error} />}
@@ -622,6 +639,11 @@ export function AdminBranchesPage() {
               <button onClick={() => openEdit(b)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-4 h-4" /></button>
             </div>
             {b.address && <p className="text-slate-500 text-xs mt-2">{b.address}</p>}
+            <p className="text-xs mt-1.5">
+              {b.lat != null && b.lng != null
+                ? <span className="text-emerald-400">📍 Ubicación configurada</span>
+                : <span className="text-amber-400">⚠ Sin coordenadas (no autodetecta)</span>}
+            </p>
           </Card>
         ))}
       </div>

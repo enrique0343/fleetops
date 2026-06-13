@@ -4,6 +4,7 @@ import { AppError } from '../lib/http';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { hashPassword } from '../lib/crypto';
 import { requireFields, isEmail, normalizeEmail } from '../lib/validate';
+import { geocodeBest } from '../lib/geocode';
 
 const catalogs = new Hono<AppEnv>();
 
@@ -28,32 +29,53 @@ catalogs.get('/branches', authenticate, async (c) => {
 catalogs.post('/branches', authenticate, requireAdmin, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   requireFields(body, ['name', 'code']);
+  // Auto-geocodifica las coordenadas a partir de la dirección si no se enviaron.
+  let lat = body.lat != null ? Number(body.lat) : null;
+  let lng = body.lng != null ? Number(body.lng) : null;
+  if ((lat == null || lng == null) && body.address) {
+    const hit = await geocodeBest(c.env, body.address);
+    if (hit) { lat = hit.lat; lng = hit.lng; }
+  }
   const branch = await c.get('prisma').branch.create({
-    data: {
-      name: body.name,
-      code: body.code,
-      address: body.address,
-      lat: body.lat != null ? Number(body.lat) : null,
-      lng: body.lng != null ? Number(body.lng) : null,
-    },
+    data: { name: body.name, code: body.code, address: body.address, lat, lng },
   });
   return c.json({ success: true, data: branch }, 201);
 });
 
 catalogs.patch('/branches/:id', authenticate, requireAdmin, async (c) => {
   const body = await c.req.json().catch(() => ({}));
+  // Si cambian la dirección y no envían coords, re-geocodifica automáticamente.
+  let lat = body.lat !== undefined ? (body.lat != null ? Number(body.lat) : null) : undefined;
+  let lng = body.lng !== undefined ? (body.lng != null ? Number(body.lng) : null) : undefined;
+  if (body.address && body.lat == null && body.lng == null) {
+    const hit = await geocodeBest(c.env, body.address);
+    if (hit) { lat = hit.lat; lng = hit.lng; }
+  }
   const branch = await c.get('prisma').branch.update({
     where: { id: c.req.param('id') },
-    data: {
-      name: body.name,
-      code: body.code,
-      address: body.address,
-      lat: body.lat !== undefined ? (body.lat != null ? Number(body.lat) : null) : undefined,
-      lng: body.lng !== undefined ? (body.lng != null ? Number(body.lng) : null) : undefined,
-      isActive: body.isActive,
-    },
+    data: { name: body.name, code: body.code, address: body.address, lat, lng, isActive: body.isActive },
   });
   return c.json({ success: true, data: branch });
+});
+
+// Rellena coordenadas de todas las sucursales con dirección pero sin geocodificar.
+catalogs.post('/branches/geocode-all', authenticate, requireAdmin, async (c) => {
+  const prisma = c.get('prisma');
+  const pending = await prisma.branch.findMany({
+    where: { OR: [{ lat: null }, { lng: null }], address: { not: null } },
+  });
+  let updated = 0;
+  const failed: string[] = [];
+  for (const b of pending) {
+    const hit = await geocodeBest(c.env, b.address!);
+    if (hit) {
+      await prisma.branch.update({ where: { id: b.id }, data: { lat: hit.lat, lng: hit.lng } });
+      updated++;
+    } else {
+      failed.push(b.name);
+    }
+  }
+  return c.json({ success: true, data: { updated, failed, total: pending.length } });
 });
 
 // ─── VEHICLES ───
