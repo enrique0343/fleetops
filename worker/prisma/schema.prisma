@@ -164,7 +164,7 @@ model Trip {
   id              String  @id @default(uuid())
   driverId        String  @map("driver_id")
   vehicleId       String  @map("vehicle_id")
-  originBranchId  String  @map("origin_branch_id")
+  originBranchId  String? @map("origin_branch_id") // opcional: el origen real es el GPS de inicio
   destinationId   String  @map("destination_id")
   closureBranchId String? @map("closure_branch_id")
 
@@ -202,7 +202,7 @@ model Trip {
 
   driver        User         @relation("DriverTrips", fields: [driverId], references: [id])
   vehicle       Vehicle      @relation(fields: [vehicleId], references: [id])
-  originBranch  Branch       @relation("OriginBranch", fields: [originBranchId], references: [id])
+  originBranch  Branch?      @relation("OriginBranch", fields: [originBranchId], references: [id])
   destination   Location     @relation("TripDestination", fields: [destinationId], references: [id])
   closureBranch Branch?      @relation("ClosureBranch", fields: [closureBranchId], references: [id])
   events        TripEvent[]

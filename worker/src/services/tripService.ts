@@ -5,7 +5,7 @@ import { toJson, fromJson } from '../lib/json';
 interface StartTripInput {
   driverId: string;
   vehicleId: string;
-  originBranchId: string;
+  originBranchId?: string; // opcional: el origen real es el GPS de inicio
   destinationId: string;
   startLat?: number;
   startLng?: number;
@@ -56,7 +56,7 @@ export class TripService {
           id: tripId,
           driverId: input.driverId,
           vehicleId: input.vehicleId,
-          originBranchId: input.originBranchId,
+          originBranchId: input.originBranchId ?? null,
           destinationId: input.destinationId,
           status: 'IN_TRANSIT',
           startedAt: input.deviceTimestamp,

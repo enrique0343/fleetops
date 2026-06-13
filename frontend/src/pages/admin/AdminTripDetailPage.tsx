@@ -247,7 +247,7 @@ export default function AdminTripDetailPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <DataField label="Motorista" value={trip.driver?.fullName || '—'} />
           <DataField label="Vehículo" value={trip.vehicle ? `${trip.vehicle.plate} — ${trip.vehicle.brand} ${trip.vehicle.model}` : '—'} />
-          <DataField label="Origen" value={trip.originBranch?.name || '—'} />
+          <DataField label="Origen" value={trip.originBranch?.name || '📍 Punto GPS de inicio'} />
           <DataField label="Destino" value={trip.destination?.name || '—'} />
           <DataField label="Inicio" value={format(new Date(trip.startedAt), 'dd/MM/yyyy HH:mm:ss', { locale: es })} />
           <DataField

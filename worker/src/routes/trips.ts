@@ -14,7 +14,8 @@ const dt = (v: any) => (v ? new Date(v) : new Date());
 
 trips.post('/start', authenticate, async (c) => {
   const body = await c.req.json().catch(() => ({}));
-  requireFields(body, ['vehicleId', 'originBranchId', 'destinationId']);
+  // El origen ya no se elige: lo define la captura GPS de inicio (startLat/Lng).
+  requireFields(body, ['vehicleId', 'destinationId']);
 
   // Urgent self-dispatch (no appointment) requires a stated reason for traceability.
   const priority = body.priority === 'URGENT' || body.priority === 'EMERGENCY' ? body.priority : 'NORMAL';
@@ -26,7 +27,7 @@ trips.post('/start', authenticate, async (c) => {
   const trip = await svc.startTrip({
     driverId: c.get('user').userId,
     vehicleId: body.vehicleId,
-    originBranchId: body.originBranchId,
+    originBranchId: body.originBranchId, // normalmente ausente (origen = GPS)
     destinationId: body.destinationId,
     startLat: body.startLat,
     startLng: body.startLng,

@@ -44,17 +44,6 @@ const statusHero: Record<string, { label: string; sub: string; classes: string; 
   },
 };
 
-// Distancia great-circle en km (para detectar la sucursal más cercana al GPS).
-function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
-  const R = 6371;
-  const dLat = ((bLat - aLat) * Math.PI) / 180;
-  const dLng = ((bLng - aLng) * Math.PI) / 180;
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.sin(dLng / 2) ** 2 * Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180);
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
 function useElapsed(startedAt?: string) {
   const [, force] = useState(0);
   useEffect(() => {
@@ -86,8 +75,7 @@ export default function DriverTripPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [incidentTypes, setIncidentTypes] = useState<IncidentType[]>([]);
 
-  // Setup form
-  const [originBranchId, setOriginBranchId] = useState('');
+  // Setup form (sin sucursal de origen: el origen es la ubicación GPS al iniciar)
   const [vehicleId, setVehicleId] = useState('');
   const [scannedVehicle, setScannedVehicle] = useState<Vehicle | null>(null);
   const [verifyMethod, setVerifyMethod] = useState<'scan' | 'manual' | null>(null);
@@ -111,55 +99,6 @@ export default function DriverTripPage() {
   const [finishComment, setFinishComment] = useState('');
 
   const elapsed = useElapsed(phase === 'active' ? activeTrip?.startedAt : undefined);
-
-  // Autodetección de sucursal por GPS: al preparar el viaje, se selecciona
-  // sola la sucursal más cercana a la posición del conductor (evita errores
-  // y manipulación manual). Lo mismo para la sucursal de llegada al finalizar.
-  const [autoBranch, setAutoBranch] = useState<{ name: string; km: number } | null>(null);
-  const [autoFinishBranch, setAutoFinishBranch] = useState<{ name: string; km: number } | null>(null);
-  const [originManual, setOriginManual] = useState(false);
-  const branchHasCoords = branches.some((b) => b.lat != null && b.lng != null);
-
-  const nearestBranch = useCallback((lat: number, lng: number) => {
-    let best: Branch | null = null;
-    let bestKm = Infinity;
-    for (const b of branches) {
-      if (b.lat == null || b.lng == null) continue;
-      const d = distanceKm(lat, lng, b.lat, b.lng);
-      if (d < bestKm) { bestKm = d; best = b; }
-    }
-    return best ? { branch: best, km: Math.round(bestKm * 10) / 10 } : null;
-  }, [branches]);
-
-  useEffect(() => {
-    if (phase !== 'setup' || branches.length === 0 || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const hit = nearestBranch(pos.coords.latitude, pos.coords.longitude);
-        if (hit) {
-          setOriginBranchId(hit.branch.id);
-          setAutoBranch({ name: hit.branch.name, km: hit.km });
-        }
-      },
-      () => { /* sin GPS: queda la selección manual */ },
-      { timeout: 8000, maximumAge: 60000 }
-    );
-  }, [phase, branches, nearestBranch]);
-
-  useEffect(() => {
-    if (!finishModal || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const hit = nearestBranch(pos.coords.latitude, pos.coords.longitude);
-        if (hit) {
-          setFinishBranchId(hit.branch.id);
-          setAutoFinishBranch({ name: hit.branch.name, km: hit.km });
-        }
-      },
-      () => {},
-      { timeout: 8000, maximumAge: 30000 }
-    );
-  }, [finishModal, nearestBranch]);
 
   // Mapa del recorrido del conductor (cerrado por defecto para ahorrar datos).
   const [showMap, setShowMap] = useState(false);
@@ -232,8 +171,6 @@ export default function DriverTripPage() {
       setLocations(ls);
       setIncidentTypes(iRes.data.data || []);
 
-      if (user?.branch?.id) setOriginBranchId(user.branch.id);
-      else if (br.length === 1) setOriginBranchId(br[0].id);
       // Con una sola opción disponible, pre-selecciona para ahorrar toques
       if (vs.length === 1) setVehicleId(vs[0].id);
       if (ls.length === 1) setDestinationId(ls[0].id);
@@ -252,9 +189,6 @@ export default function DriverTripPage() {
   const applyLastSetup = () => {
     try {
       const last = JSON.parse(localStorage.getItem(LAST_TRIP_KEY) || '{}');
-      if (last.originBranchId && branches.some((b) => b.id === last.originBranchId)) {
-        setOriginBranchId(last.originBranchId);
-      }
       if (last.destinationId && locations.some((l) => l.id === last.destinationId)) {
         setDestinationId(last.destinationId);
       }
@@ -320,7 +254,7 @@ export default function DriverTripPage() {
     });
 
   const handleStartTrip = async () => {
-    if (!vehicleId || !originBranchId || !destinationId) {
+    if (!vehicleId || !destinationId) {
       setError('Completa todos los campos requeridos');
       return;
     }
@@ -335,13 +269,12 @@ export default function DriverTripPage() {
 
       const res = await api.post('/trips/start', {
         vehicleId,
-        originBranchId,
         destinationId,
         comment: finalComment,
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
-      localStorage.setItem(LAST_TRIP_KEY, JSON.stringify({ originBranchId, vehicleId, destinationId }));
+      localStorage.setItem(LAST_TRIP_KEY, JSON.stringify({ destinationId }));
       setActiveTrip(res.data.data);
       setJustFinished(false);
       setPhase('active');
@@ -426,7 +359,6 @@ export default function DriverTripPage() {
       setVehicleId('');
       setScannedVehicle(null);
       setVerifyMethod(null);
-      setOriginManual(false);
       setDestinationId('');
       setTripComment('');
       setFinishBranchId('');
@@ -538,36 +470,10 @@ export default function DriverTripPage() {
 
           <Card>
             <div className="space-y-4">
-              {/* Sucursal de origen: detectada por GPS, no se elige a mano */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Sucursal de origen</label>
-                {autoBranch && !originManual ? (
-                  <div className="flex items-center gap-3 bg-emerald-950/40 border border-emerald-800/50 rounded-xl px-4 py-3">
-                    <MapPin className="w-5 h-5 text-emerald-400 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-white font-medium">{autoBranch.name}</p>
-                      <p className="text-xs text-emerald-300/80">Detectada por tu ubicación · a {autoBranch.km} km</p>
-                    </div>
-                    <button onClick={() => setOriginManual(true)}
-                      className="text-xs text-slate-300 hover:text-white bg-slate-700/60 rounded-lg px-2.5 py-1.5">
-                      Cambiar
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <Select
-                      value={originBranchId}
-                      onChange={(e) => { setOriginBranchId(e.target.value); setAutoBranch(null); }}
-                      placeholder="Seleccionar sucursal..."
-                      options={branches.map((b) => ({ value: b.id, label: b.name }))}
-                    />
-                    <p className="text-xs text-slate-500 mt-1.5">
-                      {branchHasCoords
-                        ? 'Activa la ubicación para detectar tu sucursal automáticamente.'
-                        : 'Configura las coordenadas de las sucursales (admin) para detección automática.'}
-                    </p>
-                  </>
-                )}
+              {/* El origen se captura del GPS al iniciar; no se selecciona. */}
+              <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2.5">
+                <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
+                El punto de origen se registra automáticamente con tu ubicación al iniciar.
               </div>
 
               {/* Vehículo por escaneo de QR (evita elegir la unidad equivocada) */}
@@ -639,7 +545,7 @@ export default function DriverTripPage() {
             size="lg"
             onClick={handleStartTrip}
             loading={actionLoading === 'start'}
-            disabled={!vehicleId || !originBranchId || !destinationId}
+            disabled={!vehicleId || !destinationId}
             icon={<Play className="w-5 h-5" />}
           >
             Iniciar viaje
@@ -676,7 +582,7 @@ export default function DriverTripPage() {
             <div className="mt-4 flex items-center gap-2 text-sm">
               <span className="flex items-center gap-1.5 text-slate-200 min-w-0">
                 <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
-                <span className="truncate">{activeTrip.originBranch?.name || '—'}</span>
+                <span className="truncate">{activeTrip.originBranch?.name || 'Origen GPS'}</span>
               </span>
               <span className="text-slate-500 shrink-0">→</span>
               <span className="flex items-center gap-1.5 text-white font-medium min-w-0">
@@ -883,10 +789,10 @@ export default function DriverTripPage() {
           <Select
             label="Sucursal de llegada (opcional)"
             value={finishBranchId}
-            onChange={(e) => { setFinishBranchId(e.target.value); setAutoFinishBranch(null); }}
+            onChange={(e) => setFinishBranchId(e.target.value)}
             placeholder="Seleccionar sucursal de llegada..."
             options={branches.map((b) => ({ value: b.id, label: b.name }))}
-            hint={autoFinishBranch ? `📍 ${autoFinishBranch.name} detectada por tu ubicación (a ${autoFinishBranch.km} km)` : undefined}
+            hint="Opcional. El punto de llegada se registra con tu ubicación al finalizar."
           />
 
           <Textarea
