@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "prisma generate && wrangler deploy",
     "db:generate": "prisma generate",
     "db:diff": "prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script --output migrations/0001_init.sql",
     "db:migrate:local": "wrangler d1 migrations apply fleetops --local",
