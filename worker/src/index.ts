@@ -16,6 +16,7 @@ import providersRoutes from './routes/providers';
 import routesRoutes from './routes/routes';
 import geoRoutes from './routes/geo';
 import publicRoutes from './routes/public';
+import configRoutes from './routes/config';
 
 const app = new Hono<AppEnv>();
 
@@ -68,6 +69,7 @@ app.route('/api/outsourcing', providersRoutes);
 app.route('/api/routes', routesRoutes);
 app.route('/api/geo', geoRoutes);
 app.route('/api/public', publicRoutes);
+app.route('/api/config', configRoutes);
 
 // 404
 app.notFound((c) =>

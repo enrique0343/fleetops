@@ -11,8 +11,8 @@ import {
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-// Leaflet se carga solo cuando hay coordenadas que mostrar.
-const TripMap = lazy(() => import('../../components/TripMap'));
+// Mapa (Google Maps o OSM) se carga solo cuando hay coordenadas que mostrar.
+const TripMap = lazy(() => import('../../components/LiveMap'));
 
 const EVENT_ICONS: Record<string, string> = {
   START_TRIP: '🚀',

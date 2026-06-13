@@ -1,17 +1,13 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import type { TripMapPoint, LatLng } from './mapTypes';
 
-export interface TripMapPoint {
-  lat: number;
-  lng: number;
-  label: string;
-  kind: 'start' | 'last' | 'end';
-}
+export type { TripMapPoint } from './mapTypes';
 
 // Mapa OSM (gratuito) con la posición del conductor, los puntos del viaje y
 // la línea del recorrido real (breadcrumbs). Lazy para no inflar el bundle.
-export default function TripMap({ points, path = [] }: { points: TripMapPoint[]; path?: { lat: number; lng: number }[] }) {
+export default function TripMap({ points, path = [] }: { points: TripMapPoint[]; path?: LatLng[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
 

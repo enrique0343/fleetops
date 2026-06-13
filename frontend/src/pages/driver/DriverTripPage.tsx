@@ -9,8 +9,8 @@ import { parseVehicleQr } from '../../components/vehicleQr';
 const QrScanner = lazy(() =>
   import('../../components/QrScanner').then((m) => ({ default: m.QrScanner }))
 );
-// Mapa del recorrido (Leaflet): se carga solo si el conductor lo abre.
-const TripMap = lazy(() => import('../../components/TripMap'));
+// Mapa del recorrido (Google Maps o OSM): se carga solo si el conductor lo abre.
+const LiveMap = lazy(() => import('../../components/LiveMap'));
 import {
   Play, Square, MapPin, AlertTriangle, Navigation,
   Truck, Building2, CheckCircle2, History, Timer, ScanLine,
@@ -615,7 +615,7 @@ export default function DriverTripPage() {
             {showMap && (
               <div className="mt-3">
                 <Suspense fallback={<div className="w-full h-72 rounded-2xl bg-slate-800 animate-pulse" />}>
-                  <TripMap
+                  <LiveMap
                     path={track}
                     points={[
                       activeTrip.startLat != null && activeTrip.startLng != null

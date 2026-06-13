@@ -19,7 +19,8 @@ export interface Bindings {
   SEED_TOKEN?: string;
   OSRM_URL?: string; // optional free OSM routing engine for multi-stop optimization
   PUBLIC_FORM_TOKEN?: string; // token del enlace público de solicitudes
-  GOOGLE_MAPS_API_KEY?: string; // geocodificación Google Places (mejor cobertura ES)
+  GOOGLE_MAPS_API_KEY?: string; // geocodificación Google Places (servidor)
+  GOOGLE_MAPS_BROWSER_KEY?: string; // Google Maps JS en el navegador (restringida por dominio)
   MAPBOX_TOKEN?: string; // geocodificación Mapbox (alternativa)
 }
 
