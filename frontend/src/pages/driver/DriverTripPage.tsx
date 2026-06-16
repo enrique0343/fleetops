@@ -107,7 +107,7 @@ export default function DriverTripPage() {
     if (!showMap || phase !== 'active' || !activeTrip) return;
     const load = () =>
       api.get(`/trips/${activeTrip.id}/track`)
-        .then((r) => setTrack(r.data.data || []))
+        .then((r) => setTrack(r.data.data.path || []))
         .catch(() => {});
     load();
     const id = setInterval(load, 60_000);
@@ -115,7 +115,7 @@ export default function DriverTripPage() {
   }, [showMap, phase, activeTrip?.id]);
 
   // Rastreo en vivo: mientras el viaje está activo, reporta la posición cada
-  // 60s para que el administrador pueda ver al conductor en el mapa.
+  // 30s (captura del recorrido para trazabilidad por calles).
   useEffect(() => {
     if (phase !== 'active' || !activeTrip) return;
     let stopped = false;
@@ -134,7 +134,7 @@ export default function DriverTripPage() {
       );
     };
     sendPing();
-    const id = setInterval(sendPing, 60_000);
+    const id = setInterval(sendPing, 30_000);
     return () => { stopped = true; clearInterval(id); };
   }, [phase, activeTrip?.id]);
 

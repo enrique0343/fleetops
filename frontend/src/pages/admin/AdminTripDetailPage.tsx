@@ -66,9 +66,9 @@ export default function AdminTripDetailPage() {
     try {
       const res = await api.get(`/trips/${tripId}`);
       setTrip(res.data.data);
-      // Recorrido real (breadcrumbs) para dibujar la línea en el mapa.
+      // Recorrido real ajustado a calles (Roads API) para la línea del mapa.
       api.get(`/trips/${tripId}/track`)
-        .then((t) => setTrack(t.data.data || []))
+        .then((t) => setTrack(t.data.data.path || []))
         .catch(() => { /* sin track: el mapa muestra solo marcadores */ });
     } catch {
       setError('No se pudo cargar el viaje');

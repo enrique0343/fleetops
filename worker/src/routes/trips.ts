@@ -6,6 +6,7 @@ import { TripService } from '../services/tripService';
 import { notifyTripFinished } from '../services/notification';
 import { requireFields } from '../lib/validate';
 import { reverseGeocode } from '../lib/geocode';
+import { snapToRoads } from '../lib/roads';
 
 const trips = new Hono<AppEnv>();
 
@@ -164,7 +165,32 @@ trips.get('/:tripId/track', authenticate, async (c) => {
     orderBy: { recordedAt: 'asc' },
     take: 2000,
   });
-  return c.json({ success: true, data: points });
+
+  // Ajusta el recorrido a las calles (Roads API). Se cachea por viaje +
+  // cantidad de puntos: mientras el viaje sigue, la clave cambia y se
+  // recalcula; ya finalizado, queda fijo y se sirve de caché.
+  const raw = points.map((p) => ({ lat: p.lat, lng: p.lng }));
+  let path = raw;
+  if (raw.length >= 2) {
+    const cache = (caches as any).default as Cache;
+    const cacheKey = new Request(`https://roads.fleetops.cache/${trip.id}/${raw.length}`);
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      path = (await cached.json()) as { lat: number; lng: number }[];
+    } else {
+      path = await snapToRoads(c.env, raw);
+      c.executionCtx.waitUntil(
+        cache.put(
+          cacheKey,
+          new Response(JSON.stringify(path), {
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=86400' },
+          })
+        )
+      );
+    }
+  }
+
+  return c.json({ success: true, data: { points, path } });
 });
 
 trips.post('/:tripId/finish', authenticate, async (c) => {
