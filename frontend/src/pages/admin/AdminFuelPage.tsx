@@ -39,14 +39,16 @@ export default function AdminFuelPage() {
 
       const [fRes, kRes] = await Promise.all([
         api.get(`/fuel?${params.toString()}`),
-        api.get('/fuel/admin/kpis'),
+        api.get('/fuel/admin/kpis').catch(() => null), // KPIs son admin-only; no bloquear la tabla
       ]);
       // El backend pagina: { success, data: { data: [...], total, totalPages } }
       const fp = fRes.data.data || {};
       setRecords(fp.data || []);
       setTotal(fp.total || 0);
       setTotalPages(fp.totalPages || 1);
-      setKpis(kRes.data.data);
+      setKpis(kRes?.data?.data?.summary ? kRes.data.data : null);
+    } catch (err) {
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -93,18 +95,18 @@ export default function AdminFuelPage() {
       </div>
 
       {/* KPIs */}
-      {kpis && (
+      {kpis?.summary && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <Card>
-            <p className="text-2xl font-bold text-white">${kpis.summary.totalAmount?.toFixed(2) || '0.00'}</p>
+            <p className="text-2xl font-bold text-white">${(kpis.summary.totalAmount ?? 0).toFixed(2)}</p>
             <p className="text-slate-400 text-sm">Gasto total</p>
           </Card>
           <Card>
-            <p className="text-2xl font-bold text-white">{kpis.summary.totalQuantity?.toFixed(1) || '0'} L</p>
+            <p className="text-2xl font-bold text-white">{(kpis.summary.totalQuantity ?? 0).toFixed(1)}</p>
             <p className="text-slate-400 text-sm">Cantidad total</p>
           </Card>
           <Card>
-            <p className="text-2xl font-bold text-white">{kpis.summary.recordCount || '0'}</p>
+            <p className="text-2xl font-bold text-white">{kpis.summary.recordCount ?? 0}</p>
             <p className="text-slate-400 text-sm">Registros totales</p>
           </Card>
         </div>

@@ -77,13 +77,30 @@ fuel.get('/', authenticate, async (c) => {
 
 // GET /api/fuel/admin/kpis  (before '/:id')
 fuel.get('/admin/kpis', authenticate, requireAdmin, async (c) => {
-  const records = await c.get('prisma').fuelRecord.groupBy({
-    by: ['vehicleId'],
-    _sum: { quantity: true, totalAmount: true },
-    _count: { id: true },
-    _avg: { totalAmount: true },
+  const prisma = c.get('prisma');
+  const [byVehicle, agg] = await Promise.all([
+    prisma.fuelRecord.groupBy({
+      by: ['vehicleId'],
+      _sum: { quantity: true, totalAmount: true },
+      _count: { id: true },
+      _avg: { totalAmount: true },
+    }),
+    prisma.fuelRecord.aggregate({
+      _sum: { quantity: true, totalAmount: true },
+      _count: { id: true },
+    }),
+  ]);
+  return c.json({
+    success: true,
+    data: {
+      summary: {
+        totalAmount: agg._sum.totalAmount || 0,
+        totalQuantity: agg._sum.quantity || 0,
+        recordCount: agg._count.id || 0,
+      },
+      byVehicle,
+    },
   });
-  return c.json({ success: true, data: records });
 });
 
 // GET /api/fuel/:id
