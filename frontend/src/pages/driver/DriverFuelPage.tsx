@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import api, { getErrorMessage } from '../../services/api';
 import { Vehicle, FuelRecord, Trip } from '../../types';
-import { Button, Input, Select, Textarea, Alert, Card } from '../../components/ui';
-import { Fuel, Plus, ChevronUp, RefreshCw, Truck, Navigation } from 'lucide-react';
+import { Button, Input, Select, Textarea, Alert, Card, Modal } from '../../components/ui';
+import { Fuel, Plus, RefreshCw, Truck, Navigation } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -143,11 +143,10 @@ export default function DriverFuelPage() {
           </button>
           <Button
             size="sm"
-            icon={showForm ? <ChevronUp className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-            onClick={() => { setShowForm(!showForm); setError(''); }}
-            variant={showForm ? 'ghost' : 'primary'}
+            icon={<Plus className="w-4 h-4" />}
+            onClick={() => { setShowForm(true); setError(''); }}
           >
-            {showForm ? 'Cerrar' : 'Nueva carga'}
+            Nueva carga
           </Button>
         </div>
       </div>
@@ -155,12 +154,26 @@ export default function DriverFuelPage() {
       {success && <Alert type="success" message={success} />}
       {error && <Alert type="error" message={error} />}
 
-      {showForm && (
-        <Card>
-          <h3 className="text-sm font-semibold text-slate-200 mb-4 flex items-center gap-2">
-            <Fuel className="w-4 h-4 text-blue-400" /> Nueva carga de combustible
-          </h3>
-
+      <Modal
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        title="Nueva carga de combustible"
+        subtitle="El vehículo y el tipo de combustible se toman de tu viaje activo"
+        footer={
+          <div className="flex gap-3">
+            <Button variant="ghost" fullWidth onClick={() => setShowForm(false)}>Cancelar</Button>
+            <Button
+              fullWidth
+              onClick={handleSubmit}
+              loading={loading}
+              disabled={vehicles.length === 0}
+              icon={<Fuel className="w-4 h-4" />}
+            >
+              Registrar carga
+            </Button>
+          </div>
+        }
+      >
           <div className="space-y-4">
             {/* Vehículo */}
             {loadingVehicles ? (
@@ -312,19 +325,8 @@ export default function DriverFuelPage() {
               placeholder="Notas adicionales..."
               rows={2}
             />
-
-            <Button
-              fullWidth
-              onClick={handleSubmit}
-              loading={loading}
-              disabled={vehicles.length === 0}
-              icon={<Fuel className="w-4 h-4" />}
-            >
-              Registrar carga
-            </Button>
           </div>
-        </Card>
-      )}
+      </Modal>
 
       {/* Records */}
       <div>
