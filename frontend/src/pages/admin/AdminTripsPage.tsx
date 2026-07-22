@@ -23,6 +23,7 @@ export default function AdminTripsPage() {
   const driverId = searchParams.get('driverId') || '';
   const vehicleId = searchParams.get('vehicleId') || '';
   const telegramFailed = searchParams.get('telegramFailed') || '';
+  const manualVehicle = searchParams.get('manualVehicle') || '';
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
 
@@ -37,17 +38,20 @@ export default function AdminTripsPage() {
       if (driverId) params.set('driverId', driverId);
       if (vehicleId) params.set('vehicleId', vehicleId);
       if (telegramFailed) params.set('telegramFailed', telegramFailed);
+      if (manualVehicle) params.set('manualVehicle', manualVehicle);
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
 
       const res = await api.get(`/trips?${params.toString()}`);
-      setTrips(res.data.data || []);
-      setTotal(res.data.total || 0);
-      setTotalPages(res.data.totalPages || 1);
+      // El backend pagina: { success, data: { data: [...], total, totalPages } }
+      const tp = res.data.data || {};
+      setTrips(tp.data || []);
+      setTotal(tp.total || 0);
+      setTotalPages(tp.totalPages || 1);
     } finally {
       setLoading(false);
     }
-  }, [page, status, branchId, driverId, vehicleId, telegramFailed, dateFrom, dateTo]);
+  }, [page, status, branchId, driverId, vehicleId, telegramFailed, manualVehicle, dateFrom, dateTo]);
 
   useEffect(() => {
     loadTrips();
@@ -148,6 +152,17 @@ export default function AdminTripsPage() {
                 className="rounded accent-blue-500"
               />
               <span className="text-sm text-slate-300">Solo Telegram fallido</span>
+            </label>
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={manualVehicle === 'true'}
+                onChange={e => setFilter('manualVehicle', e.target.checked ? 'true' : '')}
+                className="rounded accent-amber-500"
+              />
+              <span className="text-sm text-slate-300">Vehículo sin escaneo</span>
             </label>
           </div>
           <div className="flex items-end">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api, { getErrorMessage } from '../../services/api';
 import { Trip, TripEvent } from '../../types';
@@ -6,10 +6,13 @@ import {
   Button, StatusBadge, TelegramBadge, Card, Alert, Modal, Textarea, Select, Input
 } from '../../components/ui';
 import {
-  ArrowLeft, RefreshCw, AlertTriangle, Wrench, Send
+  ArrowLeft, RefreshCw, AlertTriangle, Wrench, Send, MapPin
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+// Mapa (Google Maps o OSM) se carga solo cuando hay coordenadas que mostrar.
+const TripMap = lazy(() => import('../../components/LiveMap'));
 
 const EVENT_ICONS: Record<string, string> = {
   START_TRIP: '🚀',
@@ -57,10 +60,16 @@ export default function AdminTripDetailPage() {
   const [corrComment, setCorrComment] = useState('');
   const [actionLoading, setActionLoading] = useState('');
 
+  const [track, setTrack] = useState<{ lat: number; lng: number }[]>([]);
+
   const loadTrip = async () => {
     try {
       const res = await api.get(`/trips/${tripId}`);
       setTrip(res.data.data);
+      // Recorrido real ajustado a calles (Roads API) para la línea del mapa.
+      api.get(`/trips/${tripId}/track`)
+        .then((t) => setTrack(t.data.data.path || []))
+        .catch(() => { /* sin track: el mapa muestra solo marcadores */ });
     } catch {
       setError('No se pudo cargar el viaje');
     } finally {
@@ -72,6 +81,15 @@ export default function AdminTripDetailPage() {
     loadTrip();
     api.get('/catalogs/branches').then(r => setBranches(r.data.data || []));
   }, [tripId]);
+
+  // Mientras el viaje está activo, refresca cada 30s para mover el marcador
+  // del conductor en el mapa sin que el admin tenga que recargar.
+  const tripIsLive = trip && !['FINISHED', 'CANCELLED'].includes(trip.status);
+  useEffect(() => {
+    if (!tripIsLive) return;
+    const id = setInterval(loadTrip, 30_000);
+    return () => clearInterval(id);
+  }, [tripIsLive, tripId]);
 
   const handleForceClose = async () => {
     if (!forceReason.trim()) return;
@@ -229,7 +247,7 @@ export default function AdminTripDetailPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <DataField label="Motorista" value={trip.driver?.fullName || '—'} />
           <DataField label="Vehículo" value={trip.vehicle ? `${trip.vehicle.plate} — ${trip.vehicle.brand} ${trip.vehicle.model}` : '—'} />
-          <DataField label="Origen" value={trip.originBranch?.name || '—'} />
+          <DataField label="Origen" value={trip.originBranch?.name || '📍 Punto GPS de inicio'} />
           <DataField label="Destino" value={trip.destination?.name || '—'} />
           <DataField label="Inicio" value={format(new Date(trip.startedAt), 'dd/MM/yyyy HH:mm:ss', { locale: es })} />
           <DataField
@@ -237,7 +255,8 @@ export default function AdminTripDetailPage() {
             value={trip.finishedAt ? format(new Date(trip.finishedAt), 'dd/MM/yyyy HH:mm:ss', { locale: es }) : '—'}
           />
           <DataField label="Duración" value={trip.durationMinutes ? `${trip.durationMinutes} minutos` : '—'} />
-          <DataField label="Sucursal de cierre" value={trip.closureBranch?.name || '—'} />
+          <DataField label="Lugar de llegada (GPS)" value={trip.endPlace || (trip.endLat != null ? '📍 Punto GPS' : '—')} className="col-span-2" />
+          {trip.closureBranch?.name && <DataField label="Sucursal de cierre" value={trip.closureBranch.name} />}
           {trip.comment && <DataField label="Comentario" value={trip.comment} className="col-span-2" />}
         </div>
 
@@ -258,6 +277,50 @@ export default function AdminTripDetailPage() {
           </div>
         </div>
       </Card>
+
+      {/* Mapa de rastreo */}
+      {(trip.lastLat != null || trip.startLat != null) && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-blue-400" /> Ubicación del conductor
+            </h2>
+            {trip.lastPingAt && (
+              <span className="text-xs text-slate-400">
+                Último reporte hace {formatDistanceToNowStrict(new Date(trip.lastPingAt), { locale: es })}
+                {isActive && ' · se actualiza cada 30s'}
+              </span>
+            )}
+          </div>
+          <Suspense fallback={<div className="w-full h-72 rounded-2xl bg-slate-700 animate-pulse" />}>
+            <TripMap
+              path={track}
+              points={[
+                trip.startLat != null && trip.startLng != null
+                  ? { lat: trip.startLat, lng: trip.startLng, label: '🚀 Inicio del viaje', kind: 'start' as const }
+                  : null,
+                trip.lastLat != null && trip.lastLng != null
+                  ? {
+                      lat: trip.lastLat,
+                      lng: trip.lastLng,
+                      label: `🚛 ${trip.driver?.fullName || 'Conductor'} — última posición`,
+                      kind: 'last' as const,
+                    }
+                  : null,
+                trip.endLat != null && trip.endLng != null
+                  ? { lat: trip.endLat, lng: trip.endLng, label: '✅ Fin del viaje', kind: 'end' as const }
+                  : null,
+              ].filter((p): p is NonNullable<typeof p> => p !== null)}
+            />
+          </Suspense>
+          {!trip.lastPingAt && (
+            <p className="text-xs text-slate-500 mt-2">
+              Aún no hay reportes de posición del conductor. Se mostrarán automáticamente cuando su
+              dispositivo envíe ubicación (cada 60s con permisos de GPS activos).
+            </p>
+          )}
+        </Card>
+      )}
 
       {/* Timeline */}
       <Card>

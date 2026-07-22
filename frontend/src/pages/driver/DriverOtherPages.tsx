@@ -24,9 +24,10 @@ export function DriverHistoryPage() {
       const res = await api.get('/trips/my/history', {
         params: { page: 1, limit: 30 }
       });
-      const data = res.data;
-      setTrips(data.data || []);
-      setTotal(data.total || 0);
+      // El backend pagina: { success, data: { data: [...], total, ... } }
+      const page = res.data.data || {};
+      setTrips(page.data || []);
+      setTotal(page.total || 0);
     } catch (err) {
       console.error('Error cargando historial:', err);
       setError('No se pudo cargar el historial. Verifica la conexión con el servidor.');
@@ -163,10 +164,30 @@ import { useAuth } from '../../store/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, Alert } from '../../components/ui';
 import { getErrorMessage } from '../../services/api';
+import { resizeImageToDataUrl } from '../../lib/image';
+import { Camera } from 'lucide-react';
 
 export function DriverProfilePage() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoError, setPhotoError] = useState('');
+
+  // Sube la foto de perfil (reducida en el cliente) para control de identidad.
+  const handlePhotoChange = async (file: File | undefined) => {
+    if (!file || !user) return;
+    setPhotoError('');
+    setPhotoLoading(true);
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 384, 0.8);
+      await api.patch('/auth/me/profile', { photoUrl: dataUrl });
+      updateUser({ ...user, photoUrl: dataUrl });
+    } catch (err) {
+      setPhotoError(getErrorMessage(err));
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -218,12 +239,27 @@ export function DriverProfilePage() {
 
       {/* User info */}
       <Card>
+        {photoError && <div className="mb-3"><Alert type="error" message={photoError} /></div>}
         <div className="flex items-center gap-4 mb-4">
-          <div className="w-14 h-14 bg-blue-900/50 border border-blue-800/50 rounded-2xl flex items-center justify-center shrink-0">
-            <span className="text-2xl font-bold text-blue-300">
-              {user?.fullName?.charAt(0).toUpperCase()}
+          <label className="relative w-16 h-16 shrink-0 cursor-pointer group" title="Cambiar foto">
+            {user?.photoUrl ? (
+              <img src={user.photoUrl} alt="Foto de perfil"
+                className="w-16 h-16 rounded-2xl object-cover border border-blue-800/50" />
+            ) : (
+              <div className="w-16 h-16 bg-blue-900/50 border border-blue-800/50 rounded-2xl flex items-center justify-center">
+                <span className="text-2xl font-bold text-blue-300">
+                  {user?.fullName?.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+            <span className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 group-hover:bg-blue-500 rounded-lg flex items-center justify-center border border-slate-900">
+              {photoLoading
+                ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <Camera className="w-3.5 h-3.5 text-white" />}
             </span>
-          </div>
+            <input type="file" accept="image/*" capture="user" className="hidden"
+              onChange={(e) => handlePhotoChange(e.target.files?.[0])} />
+          </label>
           <div className="flex-1 min-w-0">
             <p className="text-white font-semibold truncate">{user?.fullName}</p>
             <p className="text-slate-400 text-sm truncate">{user?.email}</p>

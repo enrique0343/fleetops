@@ -1,18 +1,64 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense, type ReactNode } from 'react';
 import { useAuth } from '../../store/AuthContext';
 import api, { getErrorMessage } from '../../services/api';
 import { Trip, Branch, Vehicle, Location, IncidentType } from '../../types';
-import {
-  Button, Select, Alert, Card, Modal, Textarea, StatusBadge
-} from '../../components/ui';
+import { Button, Select, Alert, Card, Modal, Textarea, Input } from '../../components/ui';
+import { parseVehicleQr } from '../../components/vehicleQr';
+
+// El escáner usa html5-qrcode (pesado): se carga solo al abrirlo.
+const QrScanner = lazy(() =>
+  import('../../components/QrScanner').then((m) => ({ default: m.QrScanner }))
+);
+// Mapa del recorrido (Google Maps o OSM): se carga solo si el conductor lo abre.
+const LiveMap = lazy(() => import('../../components/LiveMap'));
 import {
   Play, Square, MapPin, AlertTriangle, Navigation,
-  Clock, Truck, Building2, Zap, ChevronRight
+  Truck, Building2, CheckCircle2, History, Timer, ScanLine,
 } from 'lucide-react';
-import { formatDistanceToNow, format } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 type Phase = 'setup' | 'active';
+
+const LAST_TRIP_KEY = 'fleetops_last_trip_setup';
+
+// Hero visual por estado del viaje
+const statusHero: Record<string, { label: string; sub: string; classes: string; dot: string }> = {
+  IN_TRANSIT: {
+    label: 'En tránsito',
+    sub: 'Conduce con precaución',
+    classes: 'from-blue-600/30 to-blue-900/10 border-blue-700/50',
+    dot: 'bg-blue-400',
+  },
+  IN_STOP: {
+    label: 'En parada',
+    sub: 'Continúa cuando estés listo',
+    classes: 'from-amber-600/30 to-amber-900/10 border-amber-700/50',
+    dot: 'bg-amber-400',
+  },
+  IN_INCIDENT: {
+    label: 'Incidencia activa',
+    sub: 'Resuelve y continúa la ruta',
+    classes: 'from-red-600/30 to-red-900/10 border-red-700/50',
+    dot: 'bg-red-400',
+  },
+};
+
+function useElapsed(startedAt?: string) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    if (!startedAt) return;
+    const id = setInterval(() => force((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+  if (!startedAt) return '';
+  const sec = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
 
 export default function DriverTripPage() {
   const { user } = useAuth();
@@ -21,6 +67,7 @@ export default function DriverTripPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState('');
+  const [justFinished, setJustFinished] = useState(false);
 
   // Catalogs
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -28,11 +75,18 @@ export default function DriverTripPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [incidentTypes, setIncidentTypes] = useState<IncidentType[]>([]);
 
-  // Setup form
-  const [originBranchId, setOriginBranchId] = useState('');
+  // Setup form (sin sucursal de origen: el origen es la ubicación GPS al iniciar)
   const [vehicleId, setVehicleId] = useState('');
+  const [scannedVehicle, setScannedVehicle] = useState<Vehicle | null>(null);
+  const [verifyMethod, setVerifyMethod] = useState<'scan' | 'manual' | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  // Respaldo manual (cuando la cámara falla): teclear placa + confirmar
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualPlate, setManualPlate] = useState('');
+  const [manualMatch, setManualMatch] = useState<Vehicle | null>(null);
   const [destinationId, setDestinationId] = useState('');
   const [tripComment, setTripComment] = useState('');
+  const [hasLastSetup, setHasLastSetup] = useState(false);
 
   // Modals
   const [stopModal, setStopModal] = useState(false);
@@ -43,6 +97,46 @@ export default function DriverTripPage() {
   const [incidentComment, setIncidentComment] = useState('');
   const [finishBranchId, setFinishBranchId] = useState('');
   const [finishComment, setFinishComment] = useState('');
+
+  const elapsed = useElapsed(phase === 'active' ? activeTrip?.startedAt : undefined);
+
+  // Mapa del recorrido del conductor (cerrado por defecto para ahorrar datos).
+  const [showMap, setShowMap] = useState(false);
+  const [track, setTrack] = useState<{ lat: number; lng: number }[]>([]);
+  useEffect(() => {
+    if (!showMap || phase !== 'active' || !activeTrip) return;
+    const load = () =>
+      api.get(`/trips/${activeTrip.id}/track`)
+        .then((r) => setTrack(r.data.data.path || []))
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 60_000);
+    return () => clearInterval(id);
+  }, [showMap, phase, activeTrip?.id]);
+
+  // Rastreo en vivo: mientras el viaje está activo, reporta la posición cada
+  // 30s (captura del recorrido para trazabilidad por calles).
+  useEffect(() => {
+    if (phase !== 'active' || !activeTrip) return;
+    let stopped = false;
+    const sendPing = () => {
+      if (!navigator.geolocation || stopped) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (stopped) return;
+          api.post(`/trips/${activeTrip.id}/ping`, {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          }).catch(() => { /* sin red: se reintenta en el siguiente ciclo */ });
+        },
+        () => { /* sin permiso de ubicación: no bloquear el viaje */ },
+        { timeout: 8000, maximumAge: 30000 }
+      );
+    };
+    sendPing();
+    const id = setInterval(sendPing, 30_000);
+    return () => { stopped = true; clearInterval(id); };
+  }, [phase, activeTrip?.id]);
 
   const loadActiveTrip = useCallback(async () => {
     try {
@@ -65,18 +159,23 @@ export default function DriverTripPage() {
       const [brRes, vRes, lRes, iRes] = await Promise.all([
         api.get('/catalogs/branches'),
         api.get('/catalogs/vehicles?available=true'),
-        api.get('/catalogs/locations?type=DESTINATION'),
+        api.get('/catalogs/locations'),
         api.get('/catalogs/incident-types'),
       ]);
 
-      setBranches(brRes.data.data || []);
-      setVehicles(vRes.data.data || []);
-      setLocations(lRes.data.data || []);
+      const br = brRes.data.data || [];
+      const vs = vRes.data.data || [];
+      const ls = lRes.data.data || [];
+      setBranches(br);
+      setVehicles(vs);
+      setLocations(ls);
       setIncidentTypes(iRes.data.data || []);
 
-      if (user?.branch?.id) {
-        setOriginBranchId(user.branch.id);
-      }
+      // Con una sola opción disponible, pre-selecciona para ahorrar toques
+      if (vs.length === 1) setVehicleId(vs[0].id);
+      if (ls.length === 1) setDestinationId(ls[0].id);
+
+      setHasLastSetup(Boolean(localStorage.getItem(LAST_TRIP_KEY)));
     } catch (err) {
       console.error('Error loading catalogs:', err);
     }
@@ -87,13 +186,66 @@ export default function DriverTripPage() {
     loadCatalogs();
   }, [loadActiveTrip, loadCatalogs]);
 
+  const applyLastSetup = () => {
+    try {
+      const last = JSON.parse(localStorage.getItem(LAST_TRIP_KEY) || '{}');
+      if (last.destinationId && locations.some((l) => l.id === last.destinationId)) {
+        setDestinationId(last.destinationId);
+      }
+      // El vehículo NO se rellena del historial: debe escanearse cada vez para
+      // garantizar que la unidad seleccionada es la que el conductor tiene enfrente.
+    } catch { /* setup previo corrupto: ignorar */ }
+  };
+
+  // Resultado del escaneo del QR del vehículo.
+  const handleVehicleScan = (text: string) => {
+    setScanOpen(false);
+    const parsed = parseVehicleQr(text);
+    if (!parsed) {
+      setError('Código QR no válido. Escanea el código del vehículo.');
+      return;
+    }
+    const vehicle = vehicles.find((v) => v.id === parsed.id);
+    if (!vehicle) {
+      setError(`El vehículo ${parsed.plate} no está disponible o no existe.`);
+      return;
+    }
+    setError('');
+    setVehicleId(vehicle.id);
+    setScannedVehicle(vehicle);
+    setVerifyMethod('scan');
+  };
+
+  // Placas normalizadas para comparar sin importar mayúsculas/guiones/espacios.
+  const normalizePlate = (p: string) => p.toUpperCase().replace(/[\s-]/g, '');
+
+  const handleManualLookup = (value: string) => {
+    setManualPlate(value);
+    const target = normalizePlate(value);
+    if (target.length < 3) {
+      setManualMatch(null);
+      return;
+    }
+    setManualMatch(vehicles.find((v) => normalizePlate(v.plate) === target) || null);
+  };
+
+  const confirmManualVehicle = () => {
+    if (!manualMatch) return;
+    setVehicleId(manualMatch.id);
+    setScannedVehicle(manualMatch);
+    setVerifyMethod('manual');
+    setManualOpen(false);
+    setManualPlate('');
+    setManualMatch(null);
+    setError('');
+  };
+
   const getGeoLocation = (): Promise<{ lat?: number; lng?: number }> =>
     new Promise((resolve) => {
       if (!navigator.geolocation) {
         resolve({});
         return;
       }
-
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         () => resolve({}),
@@ -102,26 +254,29 @@ export default function DriverTripPage() {
     });
 
   const handleStartTrip = async () => {
-    if (!vehicleId || !originBranchId || !destinationId) {
+    if (!vehicleId || !destinationId) {
       setError('Completa todos los campos requeridos');
       return;
     }
-
     setError('');
     setActionLoading('start');
-
     try {
       const geo = await getGeoLocation();
+      // Trazabilidad: dejar constancia si el vehículo se ingresó a mano
+      // (respaldo de cámara) en lugar de escanearse.
+      const manualNote = verifyMethod === 'manual' ? '[Vehículo ingresado manualmente — cámara no disponible]' : '';
+      const finalComment = [tripComment, manualNote].filter(Boolean).join(' ') || undefined;
+
       const res = await api.post('/trips/start', {
         vehicleId,
-        originBranchId,
         destinationId,
-        comment: tripComment || undefined,
+        comment: finalComment,
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
-
+      localStorage.setItem(LAST_TRIP_KEY, JSON.stringify({ destinationId }));
       setActiveTrip(res.data.data);
+      setJustFinished(false);
       setPhase('active');
     } catch (err) {
       setError(getErrorMessage(err));
@@ -132,9 +287,7 @@ export default function DriverTripPage() {
 
   const handleStop = async () => {
     if (!activeTrip) return;
-
     setActionLoading('stop');
-
     try {
       const geo = await getGeoLocation();
       const res = await api.post(`/trips/${activeTrip.id}/stop`, {
@@ -142,7 +295,6 @@ export default function DriverTripPage() {
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
-
       setActiveTrip((prev) => (prev ? { ...prev, status: res.data.data.status } : null));
       setStopModal(false);
       setStopComment('');
@@ -155,14 +307,11 @@ export default function DriverTripPage() {
 
   const handleResume = async () => {
     if (!activeTrip) return;
-
     setActionLoading('resume');
-
     try {
       await api.post(`/trips/${activeTrip.id}/resume`, {
         deviceTimestamp: new Date().toISOString(),
       });
-
       setActiveTrip((prev) => (prev ? { ...prev, status: 'IN_TRANSIT' } : null));
     } catch (err) {
       setError(getErrorMessage(err));
@@ -173,9 +322,7 @@ export default function DriverTripPage() {
 
   const handleIncident = async () => {
     if (!activeTrip || !incidentComment.trim()) return;
-
     setActionLoading('incident');
-
     try {
       const geo = await getGeoLocation();
       await api.post(`/trips/${activeTrip.id}/incident`, {
@@ -184,7 +331,6 @@ export default function DriverTripPage() {
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
-
       setActiveTrip((prev) => (prev ? { ...prev, status: 'IN_INCIDENT' } : null));
       setIncidentModal(false);
       setIncidentComment('');
@@ -198,9 +344,7 @@ export default function DriverTripPage() {
 
   const handleFinish = async () => {
     if (!activeTrip) return;
-
     setActionLoading('finish');
-
     try {
       const geo = await getGeoLocation();
       await api.post(`/trips/${activeTrip.id}/finish`, {
@@ -209,15 +353,18 @@ export default function DriverTripPage() {
         deviceTimestamp: new Date().toISOString(),
         ...geo,
       });
-
       setActiveTrip(null);
       setPhase('setup');
       setFinishModal(false);
       setVehicleId('');
+      setScannedVehicle(null);
+      setVerifyMethod(null);
       setDestinationId('');
       setTripComment('');
       setFinishBranchId('');
       setFinishComment('');
+      setJustFinished(true);
+      loadCatalogs();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -236,43 +383,155 @@ export default function DriverTripPage() {
 
   return (
     <div className="p-4 space-y-4">
+      {scanOpen && (
+        <Suspense fallback={null}>
+          <QrScanner
+            open={scanOpen}
+            onClose={() => setScanOpen(false)}
+            onScan={handleVehicleScan}
+            title="Escanear vehículo"
+            hint="Apunta la cámara al código QR del vehículo"
+          />
+        </Suspense>
+      )}
+
+      {/* Respaldo manual: teclear placa + confirmación del vehículo */}
+      <Modal
+        open={manualOpen}
+        onClose={() => { setManualOpen(false); setManualPlate(''); setManualMatch(null); }}
+        title="Ingresar placa manualmente"
+        footer={
+          <div className="flex gap-3">
+            <Button variant="ghost" fullWidth onClick={() => { setManualOpen(false); setManualPlate(''); setManualMatch(null); }}>
+              Cancelar
+            </Button>
+            <Button fullWidth variant="warning" onClick={confirmManualVehicle} disabled={!manualMatch}>
+              Confirmar vehículo
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <Alert type="warning" message="Usa esta opción solo si la cámara no funciona. Quedará registrado que el vehículo se ingresó manualmente." />
+          <Input
+            label="Placa del vehículo"
+            value={manualPlate}
+            onChange={(e) => handleManualLookup(e.target.value)}
+            placeholder="Ej. ABC-123"
+            autoFocus
+            autoCapitalize="characters"
+          />
+          {manualPlate.trim().length >= 3 && (
+            manualMatch ? (
+              <div className="flex items-center gap-3 bg-slate-800 border border-slate-600 rounded-xl px-4 py-3">
+                <Truck className="w-5 h-5 text-blue-400 shrink-0" />
+                <div>
+                  <p className="text-sm text-white font-medium">
+                    {manualMatch.plate} — {manualMatch.brand} {manualMatch.model}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {manualMatch.color ? `${manualMatch.color} · ` : ''}{manualMatch.fuelType || ''}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">¿Es este el vehículo que tienes enfrente?</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-red-400">No hay ningún vehículo disponible con esa placa.</p>
+            )
+          )}
+        </div>
+      </Modal>
+
       {error && <Alert type="error" message={error} />}
 
       {phase === 'setup' && (
         <>
-          <div className="pt-2">
-            <h2 className="text-xl font-bold text-white">Nuevo viaje</h2>
-            <p className="text-slate-400 text-sm mt-1">Selecciona los datos del viaje</p>
+          {justFinished && (
+            <div className="flex items-center gap-3 p-4 rounded-2xl border border-emerald-700/50 bg-emerald-900/30">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <p className="text-sm text-emerald-300">Viaje finalizado correctamente. ¡Buen trabajo!</p>
+            </div>
+          )}
+
+          <div className="pt-2 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-white">Nuevo viaje</h2>
+              <p className="text-slate-400 text-sm mt-1">Hola, {user?.fullName?.split(' ')[0]} 👋</p>
+            </div>
+            {hasLastSetup && (
+              <button
+                onClick={applyLastSetup}
+                className="flex items-center gap-1.5 text-xs font-medium text-blue-400 bg-blue-950/50 border border-blue-800/50 rounded-xl px-3 py-2 hover:bg-blue-900/50 transition-colors"
+              >
+                <History className="w-3.5 h-3.5" /> Repetir último
+              </button>
+            )}
           </div>
 
           <Card>
             <div className="space-y-4">
-              <Select
-                label="Sucursal de origen"
-                value={originBranchId}
-                onChange={(e) => setOriginBranchId(e.target.value)}
-                placeholder="Seleccionar sucursal..."
-                options={branches.map((b) => ({ value: b.id, label: b.name }))}
-              />
+              {/* El origen se captura del GPS al iniciar; no se selecciona. */}
+              <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2.5">
+                <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
+                El punto de origen se registra automáticamente con tu ubicación al iniciar.
+              </div>
 
-              <Select
-                label="Vehículo"
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                placeholder="Seleccionar vehículo disponible..."
-                options={vehicles.map((v) => ({
-                  value: v.id,
-                  label: `${v.plate} — ${v.brand} ${v.model}`,
-                }))}
-                hint={vehicles.length === 0 ? 'No hay vehículos disponibles' : undefined}
-              />
+              {/* Vehículo por escaneo de QR (evita elegir la unidad equivocada) */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">Vehículo</label>
+                {scannedVehicle ? (
+                  <div className={`flex items-center gap-3 rounded-xl px-4 py-3 border ${
+                    verifyMethod === 'scan'
+                      ? 'bg-emerald-950/40 border-emerald-800/50'
+                      : 'bg-amber-950/40 border-amber-800/50'
+                  }`}>
+                    <CheckCircle2 className={`w-5 h-5 shrink-0 ${verifyMethod === 'scan' ? 'text-emerald-400' : 'text-amber-400'}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-white font-medium">
+                        {scannedVehicle.plate} — {scannedVehicle.brand} {scannedVehicle.model}
+                      </p>
+                      <p className={`text-xs ${verifyMethod === 'scan' ? 'text-emerald-300/80' : 'text-amber-300/80'}`}>
+                        {verifyMethod === 'scan' ? 'Vehículo verificado por escaneo' : 'Ingresado manualmente — verifica que la placa coincida'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => { setScannedVehicle(null); setVehicleId(''); setVerifyMethod(null); setScanOpen(true); }}
+                      className="text-xs text-slate-300 hover:text-white bg-slate-700/60 rounded-lg px-2.5 py-1.5"
+                    >
+                      Reescanear
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => { setError(''); setScanOpen(true); }}
+                      className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3.5 font-medium transition-colors active:scale-[0.98]"
+                    >
+                      <ScanLine className="w-5 h-5" /> Escanear vehículo
+                    </button>
+                    <button
+                      onClick={() => { setError(''); setManualOpen(true); }}
+                      className="w-full text-center text-xs text-slate-400 hover:text-slate-200 underline underline-offset-2 mt-2 py-1"
+                    >
+                      ¿La cámara no funciona? Ingresar placa manualmente
+                    </button>
+                  </>
+                )}
+                <p className="text-xs text-slate-500 mt-1.5">
+                  Escanea el código QR pegado en el vehículo para seleccionarlo.
+                </p>
+              </div>
 
               <Select
                 label="Destino"
                 value={destinationId}
                 onChange={(e) => setDestinationId(e.target.value)}
-                placeholder="Seleccionar destino..."
-                options={locations.map((l) => ({ value: l.id, label: l.name }))}
+                placeholder="Seleccionar ubicación de destino..."
+                options={locations.map((l) => ({
+                  value: l.id,
+                  label: l.branch?.name ? `${l.name} (${l.branch.name})` : l.name,
+                }))}
+                hint={locations.length === 0 ? 'No hay ubicaciones. Configúralas en el panel admin.' : undefined}
               />
 
               <Textarea
@@ -290,7 +549,7 @@ export default function DriverTripPage() {
             size="lg"
             onClick={handleStartTrip}
             loading={actionLoading === 'start'}
-            disabled={!vehicleId || !originBranchId || !destinationId}
+            disabled={!vehicleId || !destinationId}
             icon={<Play className="w-5 h-5" />}
           >
             Iniciar viaje
@@ -304,140 +563,134 @@ export default function DriverTripPage() {
 
       {phase === 'active' && activeTrip && (
         <>
-          <div className="pt-2 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-white">Viaje activo</h2>
-              <p className="text-slate-400 text-sm mt-0.5">
-                Iniciado{' '}
-                {formatDistanceToNow(new Date(activeTrip.startedAt), {
-                  locale: es,
-                  addSuffix: true,
-                })}
-              </p>
+          {/* Hero de estado con cronómetro en vivo */}
+          <div className={`rounded-3xl border bg-gradient-to-br p-5 ${(statusHero[activeTrip.status] || statusHero.IN_TRANSIT).classes}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${(statusHero[activeTrip.status] || statusHero.IN_TRANSIT).dot}`} />
+                <span className="text-white font-semibold">
+                  {(statusHero[activeTrip.status] || statusHero.IN_TRANSIT).label}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-white font-mono text-2xl font-bold tabular-nums">
+                <Timer className="w-5 h-5 opacity-60" />
+                {elapsed}
+              </div>
             </div>
-            <StatusBadge status={activeTrip.status} />
+            <p className="text-slate-300/80 text-xs mt-1.5">
+              {(statusHero[activeTrip.status] || statusHero.IN_TRANSIT).sub} · inicio{' '}
+              {format(new Date(activeTrip.startedAt), 'HH:mm', { locale: es })}
+            </p>
+
+            {/* Ruta resumida */}
+            <div className="mt-4 flex items-center gap-2 text-sm">
+              <span className="flex items-center gap-1.5 text-slate-200 min-w-0">
+                <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="truncate">{activeTrip.originBranch?.name || 'Origen GPS'}</span>
+              </span>
+              <span className="text-slate-500 shrink-0">→</span>
+              <span className="flex items-center gap-1.5 text-white font-medium min-w-0">
+                <MapPin className="w-4 h-4 text-slate-300 shrink-0" />
+                <span className="truncate">{activeTrip.destination?.name || '—'}</span>
+              </span>
+            </div>
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
+              <Truck className="w-3.5 h-3.5" />
+              {activeTrip.vehicle
+                ? `${activeTrip.vehicle.plate} · ${activeTrip.vehicle.brand} ${activeTrip.vehicle.model}`
+                : '—'}
+              {activeTrip.comment && <span className="truncate"> · {activeTrip.comment}</span>}
+            </div>
           </div>
 
-          <Card>
-            <div className="space-y-3">
-              <TripInfoRow
-                icon={<Truck className="w-4 h-4 text-slate-400" />}
-                label="Vehículo"
-                value={
-                  activeTrip.vehicle
-                    ? `${activeTrip.vehicle.plate} — ${activeTrip.vehicle.brand} ${activeTrip.vehicle.model}`
-                    : vehicleId
-                }
-              />
-
-              <TripInfoRow
-                icon={<Building2 className="w-4 h-4 text-slate-400" />}
-                label="Origen"
-                value={activeTrip.originBranch?.name || '—'}
-              />
-
-              <TripInfoRow
-                icon={<MapPin className="w-4 h-4 text-slate-400" />}
-                label="Destino"
-                value={activeTrip.destination?.name || '—'}
-              />
-
-              <TripInfoRow
-                icon={<Clock className="w-4 h-4 text-slate-400" />}
-                label="Inicio"
-                value={format(new Date(activeTrip.startedAt), 'dd/MM/yyyy HH:mm', { locale: es })}
-              />
-
-              {activeTrip.comment && (
-                <TripInfoRow
-                  icon={<ChevronRight className="w-4 h-4 text-slate-400" />}
-                  label="Nota"
-                  value={activeTrip.comment}
-                />
-              )}
-            </div>
-          </Card>
-
-          {activeTrip.status === 'IN_STOP' && (
-            <Alert
-              type="warning"
-              message="Viaje en parada. Cuando estés listo, continúa la ruta."
-            />
-          )}
-
-          {activeTrip.status === 'IN_INCIDENT' && (
-            <Alert
-              type="error"
-              message="Incidencia registrada. Resuelve el problema y continúa la ruta."
-            />
-          )}
-
-          <div className="space-y-3">
-            {activeTrip.status === 'IN_TRANSIT' && (
-              <>
-                <Button
-                  fullWidth
-                  variant="secondary"
-                  size="lg"
-                  icon={<Square className="w-5 h-5" />}
-                  onClick={() => setStopModal(true)}
-                  loading={actionLoading === 'stop'}
-                >
-                  Registrar parada
-                </Button>
-
-                <Button
-                  fullWidth
-                  variant="warning"
-                  size="lg"
-                  icon={<AlertTriangle className="w-5 h-5" />}
-                  onClick={() => setIncidentModal(true)}
-                >
-                  Reportar incidencia
-                </Button>
-              </>
-            )}
-
-            {(activeTrip.status === 'IN_STOP' || activeTrip.status === 'IN_INCIDENT') && (
-              <>
-                <Button
-                  fullWidth
-                  variant="primary"
-                  size="lg"
-                  icon={<Navigation className="w-5 h-5" />}
-                  onClick={handleResume}
-                  loading={actionLoading === 'resume'}
-                >
-                  Continuar ruta
-                </Button>
-
-                {activeTrip.status === 'IN_STOP' && (
-                  <Button
-                    fullWidth
-                    variant="warning"
-                    size="lg"
-                    icon={<AlertTriangle className="w-5 h-5" />}
-                    onClick={() => setIncidentModal(true)}
-                  >
-                    Reportar incidencia
-                  </Button>
-                )}
-              </>
-            )}
-
-            <Button
-              fullWidth
-              variant="success"
-              size="lg"
-              icon={<Zap className="w-5 h-5" />}
-              onClick={() => setFinishModal(true)}
+          {/* Mi recorrido (trazabilidad visual del conductor) */}
+          <div>
+            <button
+              onClick={() => setShowMap((v) => !v)}
+              className="w-full flex items-center justify-center gap-2 text-sm text-slate-300 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 hover:border-slate-500 transition-colors"
             >
-              Finalizar viaje
-            </Button>
+              <MapPin className="w-4 h-4 text-blue-400" />
+              {showMap ? 'Ocultar mi recorrido' : 'Ver mi recorrido'}
+            </button>
+            {showMap && (
+              <div className="mt-3">
+                <Suspense fallback={<div className="w-full h-72 rounded-2xl bg-slate-800 animate-pulse" />}>
+                  <LiveMap
+                    path={track}
+                    points={[
+                      activeTrip.startLat != null && activeTrip.startLng != null
+                        ? { lat: activeTrip.startLat, lng: activeTrip.startLng, label: '🚀 Inicio', kind: 'start' as const }
+                        : null,
+                      activeTrip.lastLat != null && activeTrip.lastLng != null
+                        ? { lat: activeTrip.lastLat, lng: activeTrip.lastLng, label: '🚛 Tú estás aquí', kind: 'last' as const }
+                        : null,
+                      ...(track.length > 0 && activeTrip.lastLat == null
+                        ? [{ lat: track[track.length - 1].lat, lng: track[track.length - 1].lng, label: '🚛 Tú estás aquí', kind: 'last' as const }]
+                        : []),
+                    ].filter((p): p is NonNullable<typeof p> => p !== null)}
+                  />
+                </Suspense>
+                <p className="text-xs text-slate-500 text-center mt-2">
+                  La línea azul es tu trayecto reportado · se actualiza cada minuto
+                </p>
+              </div>
+            )}
           </div>
+
+          {/* Acciones grandes según estado */}
+          {activeTrip.status === 'IN_TRANSIT' && (
+            <div className="grid grid-cols-2 gap-3">
+              <BigAction
+                icon={<Square className="w-6 h-6" />}
+                label="Parada"
+                sub="Registrar parada"
+                tone="amber"
+                onClick={() => setStopModal(true)}
+              />
+              <BigAction
+                icon={<AlertTriangle className="w-6 h-6" />}
+                label="Incidencia"
+                sub="Reportar problema"
+                tone="red"
+                onClick={() => setIncidentModal(true)}
+              />
+            </div>
+          )}
+
+          {(activeTrip.status === 'IN_STOP' || activeTrip.status === 'IN_INCIDENT') && (
+            <div className="grid grid-cols-2 gap-3">
+              <BigAction
+                icon={<Navigation className="w-6 h-6" />}
+                label="Continuar"
+                sub="Reanudar ruta"
+                tone="blue"
+                loading={actionLoading === 'resume'}
+                onClick={handleResume}
+              />
+              <BigAction
+                icon={<AlertTriangle className="w-6 h-6" />}
+                label="Incidencia"
+                sub="Reportar problema"
+                tone="red"
+                disabled={activeTrip.status === 'IN_INCIDENT'}
+                onClick={() => setIncidentModal(true)}
+              />
+            </div>
+          )}
+
+          <Button
+            fullWidth
+            variant="success"
+            size="lg"
+            icon={<CheckCircle2 className="w-5 h-5" />}
+            onClick={() => setFinishModal(true)}
+          >
+            Finalizar viaje
+          </Button>
         </>
       )}
 
+      {/* Modal: parada */}
       <Modal
         open={stopModal}
         onClose={() => setStopModal(false)}
@@ -447,12 +700,7 @@ export default function DriverTripPage() {
             <Button variant="ghost" fullWidth onClick={() => setStopModal(false)}>
               Cancelar
             </Button>
-            <Button
-              fullWidth
-              variant="warning"
-              onClick={handleStop}
-              loading={actionLoading === 'stop'}
-            >
+            <Button fullWidth variant="warning" onClick={handleStop} loading={actionLoading === 'stop'}>
               Confirmar parada
             </Button>
           </div>
@@ -462,11 +710,12 @@ export default function DriverTripPage() {
           label="Comentario (opcional)"
           value={stopComment}
           onChange={(e) => setStopComment(e.target.value)}
-          placeholder="¿Por qué haces esta parada?"
+          placeholder="¿Por qué haces esta parada? (puedes dejarlo vacío)"
           rows={3}
         />
       </Modal>
 
+      {/* Modal: incidencia — tipos como chips de un toque */}
       <Modal
         open={incidentModal}
         onClose={() => setIncidentModal(false)}
@@ -489,27 +738,40 @@ export default function DriverTripPage() {
         }
       >
         <div className="space-y-4">
-          <Select
-            label="Tipo de incidencia"
-            value={incidentTypeId}
-            onChange={(e) => setIncidentTypeId(e.target.value)}
-            placeholder="Seleccionar tipo..."
-            options={incidentTypes.map((t) => ({
-              value: t.id,
-              label: `${t.name} (${severityLabel(t.severity)})`,
-            }))}
-          />
+          <div>
+            <p className="block text-sm font-medium text-slate-300 mb-2">Tipo de incidencia</p>
+            <div className="flex flex-wrap gap-2">
+              {incidentTypes.map((t) => {
+                const selected = incidentTypeId === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setIncidentTypeId(selected ? '' : t.id)}
+                    className={`px-3 py-2 rounded-xl text-xs font-medium border transition-colors ${
+                      selected
+                        ? severityChipSelected(t.severity)
+                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
+                    }`}
+                  >
+                    {t.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <Textarea
             label="Descripción *"
             value={incidentComment}
             onChange={(e) => setIncidentComment(e.target.value)}
-            placeholder="Describe detalladamente la incidencia..."
-            rows={4}
+            placeholder="Describe brevemente lo ocurrido..."
+            rows={3}
           />
         </div>
       </Modal>
 
+      {/* Modal: finalizar */}
       <Modal
         open={finishModal}
         onClose={() => setFinishModal(false)}
@@ -519,12 +781,7 @@ export default function DriverTripPage() {
             <Button variant="ghost" fullWidth onClick={() => setFinishModal(false)}>
               Cancelar
             </Button>
-            <Button
-              fullWidth
-              variant="success"
-              onClick={handleFinish}
-              loading={actionLoading === 'finish'}
-            >
+            <Button fullWidth variant="success" onClick={handleFinish} loading={actionLoading === 'finish'}>
               Confirmar finalización
             </Button>
           </div>
@@ -533,13 +790,11 @@ export default function DriverTripPage() {
         <div className="space-y-4">
           <Alert type="info" message="Al finalizar el viaje se enviará notificación automática." />
 
-          <Select
-            label="Sucursal de llegada (opcional)"
-            value={finishBranchId}
-            onChange={(e) => setFinishBranchId(e.target.value)}
-            placeholder="Seleccionar sucursal de llegada..."
-            options={branches.map((b) => ({ value: b.id, label: b.name }))}
-          />
+          {/* El punto de llegada es el GPS: no se elige sucursal a mano. */}
+          <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2.5">
+            <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
+            El punto de llegada se registra automáticamente con tu ubicación actual.
+          </div>
 
           <Textarea
             label="Comentario final (opcional)"
@@ -554,33 +809,44 @@ export default function DriverTripPage() {
   );
 }
 
-function TripInfoRow({
-  icon,
-  label,
-  value,
-}: {
+const bigActionTones: Record<string, string> = {
+  amber: 'border-amber-700/60 bg-amber-950/40 text-amber-300 active:bg-amber-900/50',
+  red: 'border-red-700/60 bg-red-950/40 text-red-300 active:bg-red-900/50',
+  blue: 'border-blue-700/60 bg-blue-950/40 text-blue-300 active:bg-blue-900/50',
+};
+
+function BigAction({ icon, label, sub, tone, onClick, loading, disabled }: {
   icon: ReactNode;
   label: string;
-  value: string;
+  sub: string;
+  tone: keyof typeof bigActionTones;
+  onClick: () => void;
+  loading?: boolean;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex items-start gap-3">
-      <span className="mt-0.5 shrink-0">{icon}</span>
-      <div className="min-w-0">
-        <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">{label}</p>
-        <p className="text-slate-200 text-sm mt-0.5 break-words">{value}</p>
-      </div>
-    </div>
+    <button
+      onClick={onClick}
+      disabled={loading || disabled}
+      className={`flex flex-col items-center gap-2 p-5 rounded-2xl border transition-all active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed ${bigActionTones[tone]}`}
+    >
+      {loading ? (
+        <div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" />
+      ) : (
+        icon
+      )}
+      <span className="text-sm font-semibold">{label}</span>
+      <span className="text-[11px] opacity-70 -mt-1.5">{sub}</span>
+    </button>
   );
 }
 
-function severityLabel(s: string) {
+function severityChipSelected(severity: string): string {
   const map: Record<string, string> = {
-    LOW: 'Baja',
-    MEDIUM: 'Media',
-    HIGH: 'Alta',
-    CRITICAL: 'Crítica',
+    LOW: 'bg-slate-600 border-slate-500 text-white',
+    MEDIUM: 'bg-amber-600 border-amber-500 text-white',
+    HIGH: 'bg-orange-600 border-orange-500 text-white',
+    CRITICAL: 'bg-red-600 border-red-500 text-white',
   };
-
-  return map[s] || s;
+  return map[severity] || map.MEDIUM;
 }

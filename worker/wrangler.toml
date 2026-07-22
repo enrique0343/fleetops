@@ -1,0 +1,20 @@
+name = "fleetops-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Non-secret runtime variables.
+# Secrets (JWT_SECRET, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SEED_TOKEN)
+# must be set with: wrangler secret put <NAME>
+[vars]
+CORS_ORIGIN = "https://fleetops-frontend.pages.dev"
+JWT_EXPIRES_IN = "7d"
+
+# Cloudflare D1 (SQLite) binding.
+# Create the DB with:  wrangler d1 create fleetops
+# then paste the printed database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "fleetops"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+migrations_dir = "migrations"

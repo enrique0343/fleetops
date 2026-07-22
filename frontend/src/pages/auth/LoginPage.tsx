@@ -26,13 +26,14 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6">
-      {/* Logo */}
+      {/* Identidad */}
       <div className="mb-10 text-center">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-900/40">
-          <Truck className="w-8 h-8 text-white" />
+        <div className="inline-flex items-center justify-center w-14 h-14 bg-[#1A2B4A] border border-slate-700 rounded-2xl mb-5">
+          <Truck className="w-7 h-7 text-white" strokeWidth={1.5} />
         </div>
         <h1 className="text-2xl font-bold text-white tracking-tight">FleetOps</h1>
-        <p className="text-slate-400 text-sm mt-1">Control de Transporte Corporativo</p>
+        <p className="text-slate-400 text-sm mt-1.5">Gestión de Transporte y Ambulancias</p>
+        <p className="text-slate-600 text-xs mt-0.5">Avante Complejo Hospitalario</p>
       </div>
 
       {/* Form */}
@@ -82,7 +83,9 @@ export default function LoginPage() {
           </form>
         </div>
 
-
+        <p className="text-center text-[11px] text-slate-600 mt-6">
+          Uso interno · Inversiones Avante S.A. de C.V.
+        </p>
       </div>
     </div>
   );
