@@ -139,7 +139,7 @@ export default function AdminTripDetailPage() {
 
   if (!trip) return (
     <div className="text-center pt-16">
-      <p className="text-red-400">Viaje no encontrado</p>
+      <p className="text-red-700">Viaje no encontrado</p>
       <Button variant="ghost" className="mt-4" onClick={() => navigate('/admin/trips')}>
         Volver a viajes
       </Button>
@@ -164,17 +164,17 @@ export default function AdminTripDetailPage() {
 
       <div className="flex flex-wrap items-start gap-3 justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Viaje #{trip.id.substring(0, 8)}</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Viaje #{trip.id.substring(0, 8)}</h1>
           <div className="flex gap-2 mt-2 flex-wrap">
             <StatusBadge status={trip.status} />
             <TelegramBadge status={trip.telegramDeliveryStatus} />
             {trip.forcedCloseFlag && (
-              <span className="text-xs bg-red-900/40 text-red-400 border border-red-800 px-2 py-1 rounded-lg">
+              <span className="text-xs bg-red-50 text-red-700 border border-red-200 px-2 py-1 rounded-lg">
                 Cierre forzoso
               </span>
             )}
             {trip.correctionFlag && (
-              <span className="text-xs bg-amber-900/40 text-amber-400 border border-amber-800 px-2 py-1 rounded-lg">
+              <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded-lg">
                 Corregido
               </span>
             )}
@@ -225,7 +225,7 @@ export default function AdminTripDetailPage() {
 
       {/* Trip data */}
       <Card>
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Datos del viaje</h2>
+        <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wider mb-4">Datos del viaje</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <DataField label="Motorista" value={trip.driver?.fullName || '—'} />
           <DataField label="Vehículo" value={trip.vehicle ? `${trip.vehicle.plate} — ${trip.vehicle.brand} ${trip.vehicle.model}` : '—'} />
@@ -242,8 +242,8 @@ export default function AdminTripDetailPage() {
         </div>
 
         {/* Telegram detail */}
-        <div className="mt-4 pt-4 border-t border-slate-700">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Telegram</p>
+        <div className="mt-4 pt-4 border-t border-slate-200">
+          <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Telegram</p>
           <div className="flex gap-4 flex-wrap">
             <DataField label="Estado" value={trip.telegramDeliveryStatus} />
             {trip.telegramLastAttemptAt && (
@@ -261,7 +261,7 @@ export default function AdminTripDetailPage() {
 
       {/* Timeline */}
       <Card>
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">
+        <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wider mb-4">
           Línea de tiempo de eventos
         </h2>
         {trip.events && trip.events.length > 0 ? (
@@ -377,7 +377,7 @@ function DataField({ label, value, className = '' }: { label: string; value: str
   return (
     <div className={className}>
       <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">{label}</p>
-      <p className="text-slate-200 text-sm mt-0.5">{value}</p>
+      <p className="text-slate-800 text-sm mt-0.5">{value}</p>
     </div>
   );
 }
@@ -390,18 +390,18 @@ function TimelineEvent({ event, isLast }: { event: TripEvent; isLast: boolean })
     <div className="flex gap-3 pb-4">
       <div className="flex flex-col items-center">
         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 border ${
-          isAdmin ? 'bg-amber-900/30 border-amber-700' :
-          isError ? 'bg-red-900/30 border-red-700' :
-          'bg-slate-700 border-slate-600'
+          isAdmin ? 'bg-amber-50 border-amber-200' :
+          isError ? 'bg-red-50 border-red-200' :
+          'bg-slate-100 border-slate-300'
         }`}>
           {EVENT_ICONS[event.type] || '•'}
         </div>
-        {!isLast && <div className="w-0.5 h-full bg-slate-700 mt-1" />}
+        {!isLast && <div className="w-0.5 h-full bg-slate-100 mt-1" />}
       </div>
       <div className="flex-1 pt-1 pb-2">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-sm font-medium text-slate-200">
+            <p className="text-sm font-medium text-slate-800">
               {EVENT_LABELS[event.type] || event.type}
             </p>
             <p className="text-xs text-slate-500">
@@ -412,15 +412,15 @@ function TimelineEvent({ event, isLast }: { event: TripEvent; isLast: boolean })
         </div>
         {event.comment && (
           <p className={`mt-1.5 text-sm px-3 py-2 rounded-lg ${
-            isError ? 'bg-red-900/20 text-red-300' :
-            isAdmin ? 'bg-amber-900/20 text-amber-300' :
-            'bg-slate-800 text-slate-300'
+            isError ? 'bg-red-50 text-red-700' :
+            isAdmin ? 'bg-amber-50 text-amber-700' :
+            'bg-white text-slate-700'
           }`}>
             {event.comment}
           </p>
         )}
         {event.metadata && Object.keys(event.metadata).length > 0 && (
-          <pre className="mt-1 text-xs text-slate-600 font-mono overflow-x-auto">
+          <pre className="mt-1 text-xs text-slate-500 font-mono overflow-x-auto">
             {JSON.stringify(event.metadata, null, 2)}
           </pre>
         )}

@@ -12,22 +12,23 @@ export default function DriverLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col max-w-md mx-auto relative">
+    <div className="driver-shell min-h-screen bg-slate-50 flex flex-col max-w-md mx-auto relative">
       {/* Top bar */}
-      <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
             <span className="text-white text-xs font-bold">FO</span>
           </div>
           <div>
-            <p className="text-white text-sm font-semibold leading-none">FleetOps</p>
+            <p className="text-slate-900 text-sm font-semibold leading-none">FleetOps</p>
             <p className="text-slate-500 text-xs leading-none mt-0.5">{user?.fullName?.split(' ')[0]}</p>
           </div>
         </div>
         <button
           onClick={handleLogout}
-          className="text-slate-400 hover:text-red-400 transition-colors p-2"
+          className="text-slate-600 hover:text-red-700 transition-colors p-2"
           title="Cerrar sesión"
+          aria-label="Cerrar sesión"
         >
           <LogOut className="w-4 h-4" />
         </button>
@@ -39,7 +40,7 @@ export default function DriverLayout() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800 px-4 pb-safe">
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-40 bg-white/95 backdrop-blur border-t border-slate-200 px-4 pb-safe">
         <div className="flex items-center justify-around py-2">
           <NavItem to="/driver" icon={<Map className="w-5 h-5" />} label="Viaje" end />
           <NavItem to="/driver/fuel" icon={<Fuel className="w-5 h-5" />} label="Combustible" />
@@ -59,8 +60,8 @@ function NavItem({ to, icon, label, end }: { to: string; icon: React.ReactNode; 
       className={({ isActive }) =>
         `flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all ${
           isActive
-            ? 'text-blue-400 bg-blue-950/50'
-            : 'text-slate-500 hover:text-slate-300'
+            ? 'text-blue-700 bg-blue-50'
+            : 'text-slate-500 hover:text-slate-700'
         }`
       }
     >

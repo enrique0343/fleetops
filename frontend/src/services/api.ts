@@ -5,7 +5,7 @@ const RAW_BASE_URL =
     ? String((import.meta as any).env.VITE_API_URL).replace(/\/$/, '')
     : '';
 
-const BASE_URL = RAW_BASE_URL ? `${RAW_BASE_URL}/api` : '/api';
+const BASE_URL = RAW_BASE_URL ? `${RAW_BASE_URL.replace(/\/api$/, '')}/api` : '/api';
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
