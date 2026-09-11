@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { Trip, Branch, User, Vehicle } from '../../types';
-import { StatusBadge, TelegramBadge, Button, Select, Input } from '../../components/ui';
+import { StatusBadge, TelegramBadge, Button, Select, Input, Alert } from '../../components/ui';
+import { getErrorMessage } from '../../services/api';
+import { dateBoundary, updateTripFilter } from '../../services/viewFilters';
 import { Search, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -13,6 +15,7 @@ export default function AdminTripsPage() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [branches, setBranches] = useState<Branch[]>([]);
   const [drivers, setDrivers] = useState<User[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -28,6 +31,7 @@ export default function AdminTripsPage() {
 
   const loadTrips = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const params = new URLSearchParams();
       params.set('page', String(page));
@@ -37,13 +41,16 @@ export default function AdminTripsPage() {
       if (driverId) params.set('driverId', driverId);
       if (vehicleId) params.set('vehicleId', vehicleId);
       if (telegramFailed) params.set('telegramFailed', telegramFailed);
-      if (dateFrom) params.set('dateFrom', dateFrom);
-      if (dateTo) params.set('dateTo', dateTo);
+      if (dateFrom) params.set('dateFrom', dateBoundary(dateFrom));
+      if (dateTo) params.set('dateTo', dateBoundary(dateTo, true));
 
       const res = await api.get(`/trips?${params.toString()}`);
       setTrips(res.data.data || []);
       setTotal(res.data.total || 0);
       setTotalPages(res.data.totalPages || 1);
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setTrips([]);
     } finally {
       setLoading(false);
     }
@@ -62,14 +69,11 @@ export default function AdminTripsPage() {
       setBranches(b.data.data || []);
       setDrivers((u.data.data || []).filter((u: User) => u.role === 'DRIVER'));
       setVehicles(v.data.data || []);
-    });
+    }).catch(err => setError(`No se pudieron cargar los filtros. ${getErrorMessage(err)}`));
   }, []);
 
   const setFilter = (key: string, value: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value); else next.delete(key);
-    next.set('page', '1');
-    setSearchParams(next);
+    setSearchParams(updateTripFilter(searchParams, key, value));
   };
 
   const clearFilters = () => {
@@ -80,16 +84,19 @@ export default function AdminTripsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Viajes</h1>
-          <p className="text-slate-400 text-sm mt-1">{total} registros encontrados</p>
+          <h1 className="text-2xl font-bold text-slate-900">Viajes</h1>
+          <p className="text-slate-600 text-sm mt-1">{total} registros encontrados</p>
         </div>
         <Button size="sm" variant="ghost" icon={<RefreshCw className="w-4 h-4" />} onClick={loadTrips}>
           Actualizar
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-3">
+      {error && <Alert type="error" message={error} />}
+      {/* Collapsible filters leave more room for journeys on mobile. */}
+      <details className="bg-white border border-slate-200 rounded-2xl p-4" open>
+        <summary className="filter-summary">Filtros de viajes</summary>
+        <div className="filters-content space-y-3">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Select
             label="Estado"
@@ -147,7 +154,7 @@ export default function AdminTripsPage() {
                 onChange={e => setFilter('telegramFailed', e.target.checked ? 'true' : '')}
                 className="rounded accent-blue-500"
               />
-              <span className="text-sm text-slate-300">Solo Telegram fallido</span>
+              <span className="text-sm text-slate-700">Solo Telegram fallido</span>
             </label>
           </div>
           <div className="flex items-end">
@@ -156,10 +163,11 @@ export default function AdminTripsPage() {
             </Button>
           </div>
         </div>
-      </div>
+        </div>
+      </details>
 
       {/* Table */}
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -173,34 +181,34 @@ export default function AdminTripsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-700 text-left">
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">ID</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Motorista</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Vehículo</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden lg:table-cell">Destino</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Estado</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Inicio</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden lg:table-cell">Telegram</th>
+                <tr className="border-b border-slate-200 text-left">
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">ID</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Motorista</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">Vehículo</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider hidden lg:table-cell">Destino</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Estado</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider hidden sm:table-cell">Inicio</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider hidden lg:table-cell">Telegram</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/50">
+              <tbody className="divide-y divide-slate-100">
                 {trips.map(trip => (
-                  <tr key={trip.id} className="hover:bg-slate-750 transition-colors">
+                  <tr key={trip.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3">
-                      <span className="font-mono text-xs text-slate-400">#{trip.id.substring(0, 8)}</span>
+                      <span className="font-mono text-xs text-slate-600">#{trip.id.substring(0, 8)}</span>
                       <div className="flex gap-1 mt-1 flex-wrap">
-                        {trip.forcedCloseFlag && <span className="text-xs text-red-400">⚡ Forzado</span>}
-                        {trip.correctionFlag && <span className="text-xs text-amber-400">✎ Corregido</span>}
+                        {trip.forcedCloseFlag && <span className="text-xs text-red-700">⚡ Forzado</span>}
+                        {trip.correctionFlag && <span className="text-xs text-amber-700">✎ Corregido</span>}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-slate-300">{trip.driver?.fullName}</td>
-                    <td className="px-4 py-3 text-slate-400 hidden md:table-cell font-mono text-xs">{trip.vehicle?.plate}</td>
-                    <td className="px-4 py-3 text-slate-400 hidden lg:table-cell">{trip.destination?.name}</td>
+                    <td className="px-4 py-3 text-slate-700">{trip.driver?.fullName}<span className="trip-mobile-details">{trip.vehicle?.plate}<br />{trip.destination?.name}</span></td>
+                    <td className="px-4 py-3 text-slate-600 hidden md:table-cell font-mono text-xs">{trip.vehicle?.plate}</td>
+                    <td className="px-4 py-3 text-slate-600 hidden lg:table-cell">{trip.destination?.name}</td>
                     <td className="px-4 py-3"><StatusBadge status={trip.status} /></td>
-                    <td className="px-4 py-3 text-slate-400 hidden sm:table-cell text-xs">
+                    <td className="px-4 py-3 text-slate-600 hidden sm:table-cell text-xs">
                       {format(new Date(trip.startedAt), 'dd/MM HH:mm', { locale: es })}
-                      {trip.durationMinutes && <span className="text-slate-600 ml-1">· {trip.durationMinutes}min</span>}
+                      {trip.durationMinutes && <span className="text-slate-500 ml-1">· {trip.durationMinutes}min</span>}
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
                       <TelegramBadge status={trip.telegramDeliveryStatus} />
@@ -208,7 +216,8 @@ export default function AdminTripsPage() {
                     <td className="px-4 py-3 text-right">
                       <Link
                         to={`/admin/trips/${trip.id}`}
-                        className="text-blue-400 hover:text-blue-300 text-xs font-medium"
+                        className="text-blue-700 hover:text-blue-700 text-sm font-medium inline-flex py-3"
+                        aria-label={`Ver viaje a ${trip.destination?.name || 'destino'} de ${trip.driver?.fullName || 'motorista'}`}
                       >
                         Ver →
                       </Link>
@@ -222,7 +231,7 @@ export default function AdminTripsPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="border-t border-slate-700 px-4 py-3 flex items-center justify-between">
+          <div className="border-t border-slate-200 px-4 py-3 flex items-center justify-between">
             <span className="text-xs text-slate-500">Página {page} de {totalPages}</span>
             <div className="flex gap-2">
               <Button

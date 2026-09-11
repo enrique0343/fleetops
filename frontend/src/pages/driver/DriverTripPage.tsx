@@ -21,6 +21,8 @@ export default function DriverTripPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState('');
+  const [activeReadError, setActiveReadError] = useState('');
+  const [catalogError, setCatalogError] = useState('');
 
   // Catalogs
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -45,6 +47,8 @@ export default function DriverTripPage() {
   const [finishComment, setFinishComment] = useState('');
 
   const loadActiveTrip = useCallback(async () => {
+    setLoading(true);
+    setActiveReadError('');
     try {
       const res = await api.get('/trips/my/active');
       if (res.data.data) {
@@ -53,14 +57,15 @@ export default function DriverTripPage() {
       } else {
         setPhase('setup');
       }
-    } catch {
-      setPhase('setup');
+    } catch (err) {
+      setActiveReadError(`No pudimos verificar tu viaje activo. ${getErrorMessage(err)}`);
     } finally {
       setLoading(false);
     }
   }, []);
 
   const loadCatalogs = useCallback(async () => {
+    setCatalogError('');
     try {
       const [brRes, vRes, lRes, iRes] = await Promise.all([
         api.get('/catalogs/branches'),
@@ -78,7 +83,7 @@ export default function DriverTripPage() {
         setOriginBranchId(user.branch.id);
       }
     } catch (err) {
-      console.error('Error loading catalogs:', err);
+      setCatalogError(`No pudimos cargar los datos del viaje. ${getErrorMessage(err)}`);
     }
   }, [user]);
 
@@ -218,6 +223,7 @@ export default function DriverTripPage() {
       setTripComment('');
       setFinishBranchId('');
       setFinishComment('');
+      await loadCatalogs();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -229,20 +235,23 @@ export default function DriverTripPage() {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-64">
         <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
-        <p className="text-slate-400 text-sm">Verificando viaje activo...</p>
+        <p className="text-slate-600 text-sm">Verificando viaje activo...</p>
       </div>
     );
   }
 
+  if (activeReadError) return <div className="p-4 space-y-4"><Alert type="error" message={activeReadError} /><Button fullWidth onClick={loadActiveTrip}>Volver a verificar</Button></div>;
+
   return (
     <div className="p-4 space-y-4">
       {error && <Alert type="error" message={error} />}
+      {catalogError && <><Alert type="error" message={catalogError} /><Button variant="secondary" onClick={loadCatalogs}>Reintentar carga de datos</Button></>}
 
       {phase === 'setup' && (
         <>
           <div className="pt-2">
-            <h2 className="text-xl font-bold text-white">Nuevo viaje</h2>
-            <p className="text-slate-400 text-sm mt-1">Selecciona los datos del viaje</p>
+            <h2 className="text-xl font-bold text-slate-900">Nuevo viaje</h2>
+            <p className="text-slate-600 text-sm mt-1">Selecciona los datos del viaje</p>
           </div>
 
           <Card>
@@ -290,13 +299,13 @@ export default function DriverTripPage() {
             size="lg"
             onClick={handleStartTrip}
             loading={actionLoading === 'start'}
-            disabled={!vehicleId || !originBranchId || !destinationId}
+            disabled={!!catalogError || !vehicleId || !originBranchId || !destinationId}
             icon={<Play className="w-5 h-5" />}
           >
             Iniciar viaje
           </Button>
 
-          <p className="text-xs text-slate-600 text-center">
+          <p className="text-xs text-slate-500 text-center">
             La geolocalización se capturará automáticamente si tienes permisos habilitados
           </p>
         </>
@@ -306,8 +315,8 @@ export default function DriverTripPage() {
         <>
           <div className="pt-2 flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-white">Viaje activo</h2>
-              <p className="text-slate-400 text-sm mt-0.5">
+              <h2 className="text-xl font-bold text-slate-900">Viaje activo</h2>
+              <p className="text-slate-600 text-sm mt-0.5">
                 Iniciado{' '}
                 {formatDistanceToNow(new Date(activeTrip.startedAt), {
                   locale: es,
@@ -321,7 +330,7 @@ export default function DriverTripPage() {
           <Card>
             <div className="space-y-3">
               <TripInfoRow
-                icon={<Truck className="w-4 h-4 text-slate-400" />}
+                icon={<Truck className="w-4 h-4 text-slate-600" />}
                 label="Vehículo"
                 value={
                   activeTrip.vehicle
@@ -331,26 +340,26 @@ export default function DriverTripPage() {
               />
 
               <TripInfoRow
-                icon={<Building2 className="w-4 h-4 text-slate-400" />}
+                icon={<Building2 className="w-4 h-4 text-slate-600" />}
                 label="Origen"
                 value={activeTrip.originBranch?.name || '—'}
               />
 
               <TripInfoRow
-                icon={<MapPin className="w-4 h-4 text-slate-400" />}
+                icon={<MapPin className="w-4 h-4 text-slate-600" />}
                 label="Destino"
                 value={activeTrip.destination?.name || '—'}
               />
 
               <TripInfoRow
-                icon={<Clock className="w-4 h-4 text-slate-400" />}
+                icon={<Clock className="w-4 h-4 text-slate-600" />}
                 label="Inicio"
                 value={format(new Date(activeTrip.startedAt), 'dd/MM/yyyy HH:mm', { locale: es })}
               />
 
               {activeTrip.comment && (
                 <TripInfoRow
-                  icon={<ChevronRight className="w-4 h-4 text-slate-400" />}
+                  icon={<ChevronRight className="w-4 h-4 text-slate-600" />}
                   label="Nota"
                   value={activeTrip.comment}
                 />
@@ -568,7 +577,7 @@ function TripInfoRow({
       <span className="mt-0.5 shrink-0">{icon}</span>
       <div className="min-w-0">
         <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">{label}</p>
-        <p className="text-slate-200 text-sm mt-0.5 break-words">{value}</p>
+        <p className="text-slate-800 text-sm mt-0.5 break-words">{value}</p>
       </div>
     </div>
   );

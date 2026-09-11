@@ -20,7 +20,6 @@ export default function DriverFuelPage() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingVehicles, setLoadingVehicles] = useState(true);
-  const [debugInfo, setDebugInfo] = useState('');
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
@@ -33,26 +32,22 @@ export default function DriverFuelPage() {
   const [isFullTank, setIsFullTank] = useState(true);
   const [observation, setObservation] = useState('');
   const [recordedAt, setRecordedAt] = useState(
-    new Date().toISOString().slice(0, 16)
+    format(new Date(), "yyyy-MM-dd'T'HH:mm")
   );
 
   const loadVehicles = useCallback(async () => {
     setLoadingVehicles(true);
-    setDebugInfo('');
     try {
       // Intentar sin filtro de disponibilidad
       const res = await api.get('/catalogs/vehicles');
-      console.log('Vehicles response:', res.data);
       const all = res.data.data || [];
-      setDebugInfo(`API devolvió ${all.length} vehículos en total`);
       // Filtrar solo activos
       const active = all.filter((v: Vehicle) => v.isActive !== false);
       setVehicles(active);
-      console.log('Vehículos activos:', active.length);
     } catch (err) {
       const msg = getErrorMessage(err);
       console.error('Error cargando vehículos:', msg);
-      setDebugInfo(`Error: ${msg}`);
+      setError(`No se pudieron cargar los vehículos. ${msg}`);
     } finally {
       setLoadingVehicles(false);
     }
@@ -76,7 +71,7 @@ export default function DriverFuelPage() {
     setVehicleId(''); setStationName(''); setFuelType('');
     setQuantity(''); setTotalAmount(''); setOdometerKm('');
     setIsFullTank(true); setObservation('');
-    setRecordedAt(new Date().toISOString().slice(0, 16));
+    setRecordedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   };
 
   const handleSubmit = async () => {
@@ -116,11 +111,11 @@ export default function DriverFuelPage() {
     <div className="p-4 space-y-4">
       <div className="pt-2 flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">Combustible</h2>
-          <p className="text-slate-400 text-sm">Registro de cargas de gasolina</p>
+          <h2 className="text-xl font-bold text-slate-900">Combustible</h2>
+          <p className="text-slate-600 text-sm">Registro de cargas de gasolina</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => { loadVehicles(); loadRecords(); }} className="text-slate-400 hover:text-white p-2 transition-colors" title="Recargar">
+          <button onClick={() => { loadVehicles(); loadRecords(); }} className="text-slate-600 hover:text-slate-900 p-2 transition-colors" title="Recargar">
             <RefreshCw className="w-4 h-4" />
           </button>
           <Button
@@ -134,26 +129,19 @@ export default function DriverFuelPage() {
         </div>
       </div>
 
-      {/* Debug info - temporal para diagnóstico */}
-      {debugInfo && (
-        <div className="bg-slate-800 border border-slate-600 rounded-lg p-2 text-xs text-slate-400 font-mono">
-          🔍 {debugInfo}
-        </div>
-      )}
-
       {success && <Alert type="success" message={success} />}
       {error && <Alert type="error" message={error} />}
 
       {showForm && (
         <Card>
-          <h3 className="text-sm font-semibold text-slate-200 mb-4 flex items-center gap-2">
-            <Fuel className="w-4 h-4 text-blue-400" /> Nueva carga de combustible
+          <h3 className="text-sm font-semibold text-slate-800 mb-4 flex items-center gap-2">
+            <Fuel className="w-4 h-4 text-blue-700" /> Nueva carga de combustible
           </h3>
 
           <div className="space-y-4">
             {/* Vehículo */}
             {loadingVehicles ? (
-              <div className="bg-slate-700 rounded-xl p-3 text-sm text-slate-400 text-center animate-pulse">
+              <div className="bg-slate-100 rounded-xl p-3 text-sm text-slate-600 text-center animate-pulse">
                 Cargando vehículos...
               </div>
             ) : vehicles.length === 0 ? (
@@ -161,20 +149,20 @@ export default function DriverFuelPage() {
                 <Alert type="warning" message="No se encontraron vehículos. Presiona el botón ↻ para intentar de nuevo." />
                 <button
                   onClick={loadVehicles}
-                  className="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-xl py-2.5 transition-colors"
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-xl py-2.5 transition-colors"
                 >
                   ↻ Reintentar cargar vehículos
                 </button>
               </div>
             ) : (
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Vehículo * <span className="text-slate-500 font-normal">({vehicles.length} disponibles)</span>
                 </label>
                 <select
                   value={vehicleId}
                   onChange={e => setVehicleId(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-xl px-4 py-3 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Seleccionar vehículo...</option>
                   {vehicles.map(v => (
@@ -194,11 +182,11 @@ export default function DriverFuelPage() {
             />
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Gasolinera / Estación *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Gasolinera / Estación *</label>
               <select
                 value={stationName}
                 onChange={e => setStationName(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-xl px-4 py-3 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Seleccionar gasolinera...</option>
                 {GASOLINERAS.map(g => (
@@ -208,11 +196,11 @@ export default function DriverFuelPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Tipo de combustible *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Tipo de combustible *</label>
               <select
                 value={fuelType}
                 onChange={e => setFuelType(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-xl px-4 py-3 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Seleccionar...</option>
                 <option value="Gasolina Regular">Gasolina Regular</option>
@@ -260,7 +248,7 @@ export default function DriverFuelPage() {
                 onChange={e => setIsFullTank(e.target.checked)}
                 className="w-4 h-4 accent-blue-500"
               />
-              <label htmlFor="full-tank" className="text-sm text-slate-300 cursor-pointer">
+              <label htmlFor="full-tank" className="text-sm text-slate-700 cursor-pointer">
                 Tanque lleno completo
               </label>
             </div>
@@ -288,7 +276,7 @@ export default function DriverFuelPage() {
 
       {/* Records */}
       <div>
-        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
+        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wider mb-3">
           Mis registros recientes
         </h3>
         {myRecords.length === 0 ? (
@@ -302,7 +290,7 @@ export default function DriverFuelPage() {
               <Card key={record.id} className="!p-3">
                 <div className="flex justify-between items-start">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-200">
+                    <p className="text-sm font-semibold text-slate-800">
                       {record.vehicle?.plate || '—'} — {record.stationName}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">
@@ -310,14 +298,14 @@ export default function DriverFuelPage() {
                     </p>
                   </div>
                   <div className="text-right ml-3 shrink-0">
-                    <p className="text-sm font-bold text-blue-400">${record.totalAmount.toFixed(2)}</p>
+                    <p className="text-sm font-bold text-blue-700">${record.totalAmount.toFixed(2)}</p>
                     <p className="text-xs text-slate-500">{record.quantity} gal</p>
                   </div>
                 </div>
                 <div className="mt-2 flex gap-2 flex-wrap">
-                  <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">⛽ {record.fuelType}</span>
-                  {record.isFullTank && <span className="text-xs bg-emerald-900/40 text-emerald-400 px-2 py-0.5 rounded">✓ Lleno</span>}
-                  {record.odometerKm && <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">📏 {record.odometerKm.toLocaleString()} km</span>}
+                  <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">⛽ {record.fuelType}</span>
+                  {record.isFullTank && <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">✓ Lleno</span>}
+                  {record.odometerKm && <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">📏 {record.odometerKm.toLocaleString()} km</span>}
                 </div>
               </Card>
             ))}

@@ -1,4 +1,4 @@
-import { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes } from 'react';
+import { useEffect, useRef, useId, ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes } from 'react';
 import { Loader2, AlertCircle, CheckCircle, Info, XCircle } from 'lucide-react';
 
 // ─────────────────────────────────────────────
@@ -16,15 +16,15 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses = {
   primary: 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-800',
-  secondary: 'bg-slate-700 hover:bg-slate-600 text-slate-100 border border-slate-600',
+  secondary: 'bg-slate-100 hover:bg-slate-200 text-slate-900 border border-slate-300',
   danger: 'bg-red-600 hover:bg-red-700 text-white disabled:bg-red-800',
-  ghost: 'bg-transparent hover:bg-slate-800 text-slate-300 border border-slate-700',
+  ghost: 'bg-transparent hover:bg-white text-slate-700 border border-slate-200',
   success: 'bg-emerald-600 hover:bg-emerald-700 text-white',
-  warning: 'bg-amber-500 hover:bg-amber-600 text-white',
+  warning: 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-200',
 };
 
 const sizeClasses = {
-  sm: 'px-3 py-1.5 text-xs gap-1.5',
+  sm: 'px-3 py-2 text-sm gap-1.5 min-h-10',
   md: 'px-4 py-2.5 text-sm gap-2',
   lg: 'px-6 py-3.5 text-base gap-2.5',
 };
@@ -47,7 +47,7 @@ export function Button({
       className={[
         'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-150',
         'disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]',
-        'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900',
+        'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white',
         variantClasses[variant],
         sizeClasses[size],
         fullWidth ? 'w-full' : '',
@@ -79,7 +79,7 @@ export function Input({ label, error, hint, className = '', id, ...props }: Inpu
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={inputId} className="block text-sm font-medium text-slate-300 mb-1.5">
+        <label htmlFor={inputId} className="block text-sm font-medium text-slate-700 mb-1.5">
           {label}
         </label>
       )}
@@ -87,15 +87,15 @@ export function Input({ label, error, hint, className = '', id, ...props }: Inpu
         id={inputId}
         {...props}
         className={[
-          'w-full bg-slate-800 border rounded-xl px-4 py-3 text-slate-100 text-sm',
+          'w-full bg-white border rounded-xl px-4 py-3 text-slate-900 text-sm',
           'placeholder-slate-500 transition-colors duration-150',
           'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
           'disabled:opacity-50 disabled:cursor-not-allowed',
-          error ? 'border-red-500' : 'border-slate-700 hover:border-slate-600',
+          error ? 'border-red-500' : 'border-slate-200 hover:border-slate-300',
           className,
         ].join(' ')}
       />
-      {error && <p className="mt-1.5 text-xs text-red-400 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-red-700 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{error}</p>}
       {hint && !error && <p className="mt-1.5 text-xs text-slate-500">{hint}</p>}
     </div>
   );
@@ -118,7 +118,7 @@ export function Select({ label, error, hint, options, placeholder, className = '
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={selectId} className="block text-sm font-medium text-slate-300 mb-1.5">
+        <label htmlFor={selectId} className="block text-sm font-medium text-slate-700 mb-1.5">
           {label}
         </label>
       )}
@@ -126,11 +126,11 @@ export function Select({ label, error, hint, options, placeholder, className = '
         id={selectId}
         {...props}
         className={[
-          'w-full bg-slate-800 border rounded-xl px-4 py-3 text-slate-100 text-sm',
+          'w-full bg-white border rounded-xl px-4 py-3 text-slate-900 text-sm',
           'transition-colors duration-150 appearance-none cursor-pointer',
           'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
           'disabled:opacity-50 disabled:cursor-not-allowed',
-          error ? 'border-red-500' : 'border-slate-700 hover:border-slate-600',
+          error ? 'border-red-500' : 'border-slate-200 hover:border-slate-300',
           className,
         ].join(' ')}
       >
@@ -141,7 +141,7 @@ export function Select({ label, error, hint, options, placeholder, className = '
           </option>
         ))}
       </select>
-      {error && <p className="mt-1.5 text-xs text-red-400 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-red-700 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{error}</p>}
       {hint && !error && <p className="mt-1.5 text-xs text-slate-500">{hint}</p>}
     </div>
   );
@@ -161,7 +161,7 @@ export function Textarea({ label, error, className = '', id, ...props }: Textare
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={areaId} className="block text-sm font-medium text-slate-300 mb-1.5">
+        <label htmlFor={areaId} className="block text-sm font-medium text-slate-700 mb-1.5">
           {label}
         </label>
       )}
@@ -169,14 +169,14 @@ export function Textarea({ label, error, className = '', id, ...props }: Textare
         id={areaId}
         {...props}
         className={[
-          'w-full bg-slate-800 border rounded-xl px-4 py-3 text-slate-100 text-sm resize-none',
+          'w-full bg-white border rounded-xl px-4 py-3 text-slate-900 text-sm resize-none',
           'placeholder-slate-500 transition-colors',
           'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-          error ? 'border-red-500' : 'border-slate-700 hover:border-slate-600',
+          error ? 'border-red-500' : 'border-slate-200 hover:border-slate-300',
           className,
         ].join(' ')}
       />
-      {error && <p className="mt-1.5 text-xs text-red-400 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-red-700 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{error}</p>}
     </div>
   );
 }
@@ -187,7 +187,7 @@ export function Textarea({ label, error, className = '', id, ...props }: Textare
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`bg-slate-800 border border-slate-700 rounded-2xl p-4 ${className}`}>
+    <div className={`bg-white border border-slate-200 rounded-2xl p-4 ${className}`}>
       {children}
     </div>
   );
@@ -198,17 +198,17 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
 // ─────────────────────────────────────────────
 
 const alertVariants = {
-  error: { bg: 'bg-red-900/30 border-red-800', icon: XCircle, iconColor: 'text-red-400', textColor: 'text-red-300' },
-  success: { bg: 'bg-emerald-900/30 border-emerald-800', icon: CheckCircle, iconColor: 'text-emerald-400', textColor: 'text-emerald-300' },
-  warning: { bg: 'bg-amber-900/30 border-amber-800', icon: AlertCircle, iconColor: 'text-amber-400', textColor: 'text-amber-300' },
-  info: { bg: 'bg-blue-900/30 border-blue-800', icon: Info, iconColor: 'text-blue-400', textColor: 'text-blue-300' },
+  error: { bg: 'bg-red-50 border-red-200', icon: XCircle, iconColor: 'text-red-700', textColor: 'text-red-700' },
+  success: { bg: 'bg-emerald-50 border-emerald-200', icon: CheckCircle, iconColor: 'text-emerald-700', textColor: 'text-emerald-700' },
+  warning: { bg: 'bg-amber-50 border-amber-200', icon: AlertCircle, iconColor: 'text-amber-700', textColor: 'text-amber-700' },
+  info: { bg: 'bg-blue-50 border-blue-200', icon: Info, iconColor: 'text-blue-700', textColor: 'text-blue-700' },
 };
 
 export function Alert({ type = 'info', message }: { type?: keyof typeof alertVariants; message: string }) {
   const v = alertVariants[type];
   const Icon = v.icon;
   return (
-    <div className={`flex items-start gap-3 p-3 rounded-xl border ${v.bg}`}>
+    <div role={type === 'error' ? 'alert' : 'status'} className={`flex items-start gap-3 p-3 rounded-xl border ${v.bg}`}>
       <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${v.iconColor}`} />
       <p className={`text-sm ${v.textColor}`}>{message}</p>
     </div>
@@ -220,12 +220,12 @@ export function Alert({ type = 'info', message }: { type?: keyof typeof alertVar
 // ─────────────────────────────────────────────
 
 const badgeVariants = {
-  transit: 'bg-blue-900/50 text-blue-300 border-blue-700',
-  stop: 'bg-amber-900/50 text-amber-300 border-amber-700',
-  incident: 'bg-red-900/50 text-red-300 border-red-700',
-  finished: 'bg-emerald-900/50 text-emerald-300 border-emerald-700',
-  cancelled: 'bg-slate-700 text-slate-400 border-slate-600',
-  default: 'bg-slate-700 text-slate-300 border-slate-600',
+  transit: 'bg-blue-50 text-blue-700 border-blue-200',
+  stop: 'bg-amber-50 text-amber-700 border-amber-200',
+  incident: 'bg-red-50 text-red-700 border-red-200',
+  finished: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  cancelled: 'bg-slate-100 text-slate-600 border-slate-300',
+  default: 'bg-slate-100 text-slate-700 border-slate-300',
 };
 
 const statusLabels: Record<string, string> = {
@@ -246,7 +246,7 @@ export function StatusBadge({ status }: { status: string }) {
   };
   const variant = variantMap[status] || 'default';
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border ${badgeVariants[variant]}`}>
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-medium border whitespace-nowrap ${badgeVariants[variant]}`}>
       {statusLabels[status] || status}
     </span>
   );
@@ -263,9 +263,9 @@ export function Spinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 
 export function LoadingScreen({ message = 'Cargando...' }: { message?: string }) {
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-4">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
       <Spinner size="lg" />
-      <p className="text-slate-400 text-sm">{message}</p>
+      <p className="text-slate-600 text-sm">{message}</p>
     </div>
   );
 }
@@ -283,21 +283,25 @@ interface ModalProps {
 }
 
 export function Modal({ open, onClose, title, children, footer }: ModalProps) {
-  if (!open) return null;
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  useEffect(() => {
+    const node = dialog.current;
+    if (!node) return;
+    if (open && !node.open) node.showModal();
+    if (!open && node.open) node.close();
+  }, [open]);
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full sm:max-w-lg bg-slate-800 border border-slate-700 rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-5 border-b border-slate-700">
-          <h3 className="text-base font-semibold text-slate-100">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors p-1">
-            <XCircle className="w-5 h-5" />
-          </button>
+    <dialog ref={dialog} aria-labelledby={titleId} className="ui-dialog" onCancel={e => { e.preventDefault(); onClose(); }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      {open && <div className="ui-dialog-panel">
+        <div className="flex items-center justify-between p-5 border-b border-slate-200 gap-4">
+          <h3 id={titleId} className="text-base font-semibold text-slate-900">{title}</h3>
+          <button type="button" aria-label="Cerrar diálogo" onClick={onClose} className="text-slate-600 hover:text-slate-900 p-2"><XCircle className="w-5 h-5" /></button>
         </div>
         <div className="p-5 overflow-y-auto flex-1">{children}</div>
-        {footer && <div className="p-5 border-t border-slate-700">{footer}</div>}
-      </div>
-    </div>
+        {footer && <div className="p-5 border-t border-slate-200">{footer}</div>}
+      </div>}
+    </dialog>
   );
 }
 
@@ -307,10 +311,10 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
 
 export function TelegramBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; classes: string }> = {
-    SENT: { label: '✓ Telegram', classes: 'bg-emerald-900/40 text-emerald-400 border-emerald-800' },
-    FAILED: { label: '✗ Telegram', classes: 'bg-red-900/40 text-red-400 border-red-800' },
-    PENDING: { label: '… Telegram', classes: 'bg-slate-700 text-slate-400 border-slate-600' },
-    NOT_CONFIGURED: { label: '— Telegram', classes: 'bg-slate-800 text-slate-500 border-slate-700' },
+    SENT: { label: '✓ Telegram', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    FAILED: { label: '✗ Telegram', classes: 'bg-red-50 text-red-700 border-red-200' },
+    PENDING: { label: '… Telegram', classes: 'bg-slate-100 text-slate-600 border-slate-300' },
+    NOT_CONFIGURED: { label: '— Telegram', classes: 'bg-white text-slate-500 border-slate-200' },
   };
   const s = map[status] || map['PENDING'];
   return (

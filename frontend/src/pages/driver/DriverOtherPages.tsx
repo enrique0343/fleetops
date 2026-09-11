@@ -50,12 +50,12 @@ export function DriverHistoryPage() {
     <div className="p-4 space-y-4">
       <div className="pt-2 flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">Mis viajes</h2>
-          <p className="text-slate-400 text-sm">{total} viajes registrados</p>
+          <h2 className="text-xl font-bold text-slate-900">Mis viajes</h2>
+          <p className="text-slate-600 text-sm">{total} viajes registrados</p>
         </div>
         <button
           onClick={load}
-          className="text-slate-400 hover:text-white transition-colors p-2"
+          className="text-slate-600 hover:text-slate-900 transition-colors p-2"
           title="Actualizar"
         >
           <RefreshCw className="w-4 h-4" />
@@ -63,7 +63,7 @@ export function DriverHistoryPage() {
       </div>
 
       {error && (
-        <div className="bg-red-900/20 border border-red-800/50 rounded-xl p-3 text-sm text-red-300">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -72,7 +72,7 @@ export function DriverHistoryPage() {
         <div className="text-center py-16 text-slate-500">
           <Truck className="w-12 h-12 mx-auto mb-3 opacity-20" />
           <p className="text-sm font-medium">Aún no tienes viajes registrados</p>
-          <p className="text-xs mt-1 text-slate-600">Inicia tu primer viaje desde la pestaña "Viaje"</p>
+          <p className="text-xs mt-1 text-slate-500">Inicia tu primer viaje desde la pestaña "Viaje"</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -83,12 +83,12 @@ export function DriverHistoryPage() {
                 <div className="flex flex-wrap gap-2">
                   <StatusBadge status={trip.status} />
                   {trip.forcedCloseFlag && (
-                    <span className="text-xs bg-red-900/40 text-red-400 px-2 py-0.5 rounded border border-red-800/40">
+                    <span className="text-xs bg-red-50 text-red-700 px-2 py-0.5 rounded border border-red-200">
                       ⚡ Forzado
                     </span>
                   )}
                   {trip.correctionFlag && (
-                    <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded border border-amber-800/40">
+                    <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">
                       ✎ Corregido
                     </span>
                   )}
@@ -100,7 +100,7 @@ export function DriverHistoryPage() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Truck className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="text-sm text-slate-300">
+                  <span className="text-sm text-slate-700">
                     {trip.vehicle?.plate
                       ? `${trip.vehicle.plate} — ${trip.vehicle.brand || ''} ${trip.vehicle.model || ''}`.trim()
                       : '—'}
@@ -109,14 +109,14 @@ export function DriverHistoryPage() {
 
                 <div className="flex items-start gap-2">
                   <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
-                  <span className="text-sm text-slate-300">
+                  <span className="text-sm text-slate-700">
                     {trip.originBranch?.name || '—'} → {trip.destination?.name || '—'}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-600">
                     {format(new Date(trip.startedAt), "dd MMM yyyy · HH:mm", { locale: es })}
                     {trip.finishedAt && (
                       <> → {format(new Date(trip.finishedAt), "HH:mm", { locale: es })}</>
@@ -137,12 +137,12 @@ export function DriverHistoryPage() {
               </div>
 
               {/* Footer */}
-              <div className="mt-3 pt-3 border-t border-slate-700/50">
-                <span className="text-xs text-slate-600 font-mono">
+              <div className="mt-3 pt-3 border-t border-slate-200">
+                <span className="text-xs text-slate-500 font-mono">
                   #{trip.id.substring(0, 8)}
                 </span>
                 {trip.closureBranch && (
-                  <span className="text-xs text-slate-600 ml-3">
+                  <span className="text-xs text-slate-500 ml-3">
                     Llegada: {trip.closureBranch.name}
                   </span>
                 )}
@@ -213,42 +213,42 @@ export function DriverProfilePage() {
   return (
     <div className="p-4 space-y-4">
       <div className="pt-2">
-        <h2 className="text-xl font-bold text-white">Mi perfil</h2>
+        <h2 className="text-xl font-bold text-slate-900">Mi perfil</h2>
       </div>
 
       {/* User info */}
       <Card>
         <div className="flex items-center gap-4 mb-4">
-          <div className="w-14 h-14 bg-blue-900/50 border border-blue-800/50 rounded-2xl flex items-center justify-center shrink-0">
-            <span className="text-2xl font-bold text-blue-300">
+          <div className="w-14 h-14 bg-blue-50 border border-blue-200 rounded-2xl flex items-center justify-center shrink-0">
+            <span className="text-2xl font-bold text-blue-700">
               {user?.fullName?.charAt(0).toUpperCase()}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-white font-semibold truncate">{user?.fullName}</p>
-            <p className="text-slate-400 text-sm truncate">{user?.email}</p>
-            <span className="inline-block mt-1 text-xs bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded border border-blue-800/30">
+            <p className="text-slate-900 font-semibold truncate">{user?.fullName}</p>
+            <p className="text-slate-600 text-sm truncate">{user?.email}</p>
+            <span className="inline-block mt-1 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">
               {user?.role === 'ADMIN' ? '👑 Administrador' : '🚗 Motorista'}
             </span>
           </div>
         </div>
         {branch && (
-          <div className="border-t border-slate-700/50 pt-3">
+          <div className="border-t border-slate-200 pt-3">
             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Sucursal asignada</p>
-            <p className="text-sm text-slate-300">{branch.name}</p>
+            <p className="text-sm text-slate-700">{branch.name}</p>
           </div>
         )}
         {user?.phone && (
           <div className="mt-2">
             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Teléfono</p>
-            <p className="text-sm text-slate-300">{user.phone}</p>
+            <p className="text-sm text-slate-700">{user.phone}</p>
           </div>
         )}
       </Card>
 
       {/* Change password */}
       <Card>
-        <h3 className="text-sm font-semibold text-slate-300 mb-4">Cambiar contraseña</h3>
+        <h3 className="text-sm font-semibold text-slate-700 mb-4">Cambiar contraseña</h3>
         {passSuccess && <div className="mb-3"><Alert type="success" message={passSuccess} /></div>}
         {passError && <div className="mb-3"><Alert type="error" message={passError} /></div>}
         <div className="space-y-3">

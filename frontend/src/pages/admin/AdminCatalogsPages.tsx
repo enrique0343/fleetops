@@ -101,8 +101,8 @@ export function AdminUsersPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-white">Usuarios</h1>
-          <p className="text-slate-400 text-sm">{users.length} usuarios registrados</p>
+          <h1 className="text-2xl font-bold text-slate-900">Usuarios</h1>
+          <p className="text-slate-600 text-sm">{users.length} usuarios registrados</p>
         </div>
         <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>Nuevo usuario</Button>
       </div>
@@ -110,43 +110,43 @@ export function AdminUsersPage() {
       {success && <Alert type="success" message={success} />}
       {error && <Alert type="error" message={error} />}
 
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-700">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">Nombre</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase hidden md:table-cell">Email</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">Rol</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase hidden lg:table-cell">Sucursal</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">Estado</th>
+              <tr className="border-b border-slate-200">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Nombre</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase hidden md:table-cell">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Rol</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase hidden lg:table-cell">Sucursal</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Estado</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/50">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr><td colSpan={6} className="text-center py-8 text-slate-500">Cargando...</td></tr>
               ) : users.map(user => (
-                <tr key={user.id} className="hover:bg-slate-750 transition-colors">
-                  <td className="px-4 py-3 text-slate-200 font-medium">{user.fullName}</td>
-                  <td className="px-4 py-3 text-slate-400 hidden md:table-cell">{user.email}</td>
+                <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-4 py-3 text-slate-800 font-medium">{user.fullName}</td>
+                  <td className="px-4 py-3 text-slate-600 hidden md:table-cell">{user.email}</td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-1 rounded ${user.role === 'ADMIN' ? 'bg-purple-900/40 text-purple-300' : 'bg-blue-900/40 text-blue-300'}`}>
+                    <span className={`text-xs px-2 py-1 rounded ${user.role === 'ADMIN' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'}`}>
                       {user.role === 'ADMIN' ? 'Admin' : 'Motorista'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-400 hidden lg:table-cell">{user.branch?.name || '—'}</td>
+                  <td className="px-4 py-3 text-slate-600 hidden lg:table-cell">{user.branch?.name || '—'}</td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-1 rounded ${user.isActive ? 'bg-emerald-900/40 text-emerald-300' : 'bg-slate-700 text-slate-500'}`}>
+                    <span className={`text-xs px-2 py-1 rounded ${user.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                       {user.isActive ? 'Activo' : 'Inactivo'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-2">
-                      <button onClick={() => toggleActive(user)} className="text-slate-400 hover:text-amber-400 transition-colors" title={user.isActive ? 'Desactivar' : 'Activar'}>
+                      <button onClick={() => toggleActive(user)} className="text-slate-600 hover:text-amber-700 transition-colors" title={user.isActive ? 'Desactivar' : 'Activar'}>
                         {user.isActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
                       </button>
-                      <button onClick={() => openEdit(user)} className="text-slate-400 hover:text-blue-400 transition-colors">
+                      <button onClick={() => openEdit(user)} className="text-slate-600 hover:text-blue-700 transition-colors">
                         <Pencil className="w-4 h-4" />
                       </button>
                     </div>
@@ -199,7 +199,7 @@ export function AdminUsersPage() {
           {editUser && (
             <div className="flex items-center gap-3">
               <input type="checkbox" id="isActive" checked={form.isActive} onChange={e => setForm(p => ({ ...p, isActive: e.target.checked }))} className="accent-blue-500" />
-              <label htmlFor="isActive" className="text-sm text-slate-300">Usuario activo</label>
+              <label htmlFor="isActive" className="text-sm text-slate-700">Usuario activo</label>
             </div>
           )}
         </div>
@@ -290,8 +290,8 @@ export function AdminLocationsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-white">Ubicaciones</h1>
-          <p className="text-slate-400 text-sm">{locations.length} ubicaciones</p>
+          <h1 className="text-2xl font-bold text-slate-900">Ubicaciones</h1>
+          <p className="text-slate-600 text-sm">{locations.length} ubicaciones</p>
         </div>
         <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>Nueva ubicación</Button>
       </div>
@@ -304,18 +304,18 @@ export function AdminLocationsPage() {
           <Card key={loc.id} className={!loc.isActive ? 'opacity-50' : ''}>
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <p className="text-slate-100 font-medium">{loc.name}</p>
-                <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded mt-1 inline-block">
+                <p className="text-slate-900 font-medium">{loc.name}</p>
+                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded mt-1 inline-block">
                   {typeLabels[loc.type]}
                 </span>
               </div>
-              <button onClick={() => openEdit(loc)} className="text-slate-500 hover:text-blue-400 transition-colors ml-2">
+              <button onClick={() => openEdit(loc)} className="text-slate-500 hover:text-blue-700 transition-colors ml-2">
                 <Pencil className="w-4 h-4" />
               </button>
             </div>
             {loc.description && <p className="text-slate-500 text-xs mt-2">{loc.description}</p>}
-            {loc.addressRef && <p className="text-slate-600 text-xs mt-1">📍 {loc.addressRef}</p>}
-            {loc.branch && <p className="text-slate-600 text-xs mt-1">🏢 {loc.branch.name}</p>}
+            {loc.addressRef && <p className="text-slate-500 text-xs mt-1">📍 {loc.addressRef}</p>}
+            {loc.branch && <p className="text-slate-500 text-xs mt-1">🏢 {loc.branch.name}</p>}
             {!loc.isActive && <p className="text-red-500 text-xs mt-2">● Inactiva</p>}
           </Card>
         ))}
@@ -373,7 +373,7 @@ export function AdminLocationsPage() {
           {editLoc && (
             <div className="flex items-center gap-3">
               <input type="checkbox" id="locActive" checked={form.isActive} onChange={e => setForm(p => ({ ...p, isActive: e.target.checked }))} className="accent-blue-500" />
-              <label htmlFor="locActive" className="text-sm text-slate-300">Ubicación activa</label>
+              <label htmlFor="locActive" className="text-sm text-slate-700">Ubicación activa</label>
             </div>
           )}
         </div>
@@ -432,8 +432,8 @@ export function AdminVehiclesPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-white">Vehículos</h1>
-          <p className="text-slate-400 text-sm">{vehicles.length} vehículos</p>
+          <h1 className="text-2xl font-bold text-slate-900">Vehículos</h1>
+          <p className="text-slate-600 text-sm">{vehicles.length} vehículos</p>
         </div>
         <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>Nuevo vehículo</Button>
       </div>
@@ -444,16 +444,16 @@ export function AdminVehiclesPage() {
           <Card key={v.id} className={!v.isActive ? 'opacity-50' : ''}>
             <div className="flex justify-between">
               <div>
-                <p className="font-mono font-bold text-slate-100">{v.plate}</p>
-                <p className="text-slate-400 text-sm">{v.brand} {v.model} {v.year && `(${v.year})`}</p>
+                <p className="font-mono font-bold text-slate-900">{v.plate}</p>
+                <p className="text-slate-600 text-sm">{v.brand} {v.model} {v.year && `(${v.year})`}</p>
               </div>
-              <button onClick={() => openEdit(v)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-4 h-4" /></button>
+              <button onClick={() => openEdit(v)} className="text-slate-500 hover:text-blue-700 transition-colors"><Pencil className="w-4 h-4" /></button>
             </div>
             <div className="mt-2 flex gap-2 flex-wrap">
-              {v.vehicleType && <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">{v.vehicleType}</span>}
-              {v.fuelType && <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">{v.fuelType}</span>}
-              {v.currentTripId && <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded">En uso</span>}
-              {!v.isActive && <span className="text-xs bg-red-900/40 text-red-400 px-2 py-0.5 rounded">Inactivo</span>}
+              {v.vehicleType && <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{v.vehicleType}</span>}
+              {v.fuelType && <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{v.fuelType}</span>}
+              {v.currentTripId && <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded">En uso</span>}
+              {!v.isActive && <span className="text-xs bg-red-50 text-red-700 px-2 py-0.5 rounded">Inactivo</span>}
             </div>
           </Card>
         ))}
@@ -476,7 +476,7 @@ export function AdminVehiclesPage() {
           {editVehicle && (
             <div className="flex items-center gap-3">
               <input type="checkbox" checked={form.isActive} onChange={e => setForm(p => ({ ...p, isActive: e.target.checked }))} className="accent-blue-500" id="vActive" />
-              <label htmlFor="vActive" className="text-sm text-slate-300">Vehículo activo</label>
+              <label htmlFor="vActive" className="text-sm text-slate-700">Vehículo activo</label>
             </div>
           )}
         </div>
@@ -525,7 +525,7 @@ export function AdminBranchesPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div><h1 className="text-2xl font-bold text-white">Sucursales</h1></div>
+        <div><h1 className="text-2xl font-bold text-slate-900">Sucursales</h1></div>
         <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>Nueva sucursal</Button>
       </div>
       {success && <Alert type="success" message={success} />}
@@ -535,10 +535,10 @@ export function AdminBranchesPage() {
           <Card key={b.id}>
             <div className="flex justify-between">
               <div>
-                <p className="text-slate-100 font-semibold">{b.name}</p>
-                <span className="text-xs font-mono bg-slate-700 text-slate-400 px-2 py-0.5 rounded">{b.code}</span>
+                <p className="text-slate-900 font-semibold">{b.name}</p>
+                <span className="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{b.code}</span>
               </div>
-              <button onClick={() => openEdit(b)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-4 h-4" /></button>
+              <button onClick={() => openEdit(b)} className="text-slate-500 hover:text-blue-700 transition-colors"><Pencil className="w-4 h-4" /></button>
             </div>
             {b.address && <p className="text-slate-500 text-xs mt-2">{b.address}</p>}
           </Card>
@@ -554,7 +554,7 @@ export function AdminBranchesPage() {
           {editBranch && (
             <div className="flex items-center gap-3">
               <input type="checkbox" checked={form.isActive} onChange={e => setForm(p => ({ ...p, isActive: e.target.checked }))} className="accent-blue-500" id="brActive" />
-              <label htmlFor="brActive" className="text-sm text-slate-300">Sucursal activa</label>
+              <label htmlFor="brActive" className="text-sm text-slate-700">Sucursal activa</label>
             </div>
           )}
         </div>
@@ -583,34 +583,34 @@ export function AdminAuditPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Auditoría</h1>
-        <p className="text-slate-400 text-sm">Registro de todas las mutaciones administrativas</p>
+        <h1 className="text-2xl font-bold text-slate-900">Auditoría</h1>
+        <p className="text-slate-600 text-sm">Registro de todas las mutaciones administrativas</p>
       </div>
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-700">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">Entidad</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">Acción</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase hidden md:table-cell">Administrador</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase hidden lg:table-cell">Motivo</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase">Fecha</th>
+              <tr className="border-b border-slate-200">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Entidad</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Acción</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase hidden md:table-cell">Administrador</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase hidden lg:table-cell">Motivo</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Fecha</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/50">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr><td colSpan={5} className="text-center py-8 text-slate-500">Cargando...</td></tr>
               ) : logs.map(log => (
-                <tr key={log.id} className="hover:bg-slate-750 transition-colors">
+                <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3">
-                    <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">{log.entityName}</span>
-                    <p className="text-slate-600 text-xs font-mono mt-0.5">#{log.entityId.substring(0, 8)}</p>
+                    <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">{log.entityName}</span>
+                    <p className="text-slate-500 text-xs font-mono mt-0.5">#{log.entityId.substring(0, 8)}</p>
                   </td>
-                  <td className="px-4 py-3 text-slate-300 font-medium">{log.action}</td>
-                  <td className="px-4 py-3 text-slate-400 hidden md:table-cell">{log.admin?.fullName}</td>
+                  <td className="px-4 py-3 text-slate-700 font-medium">{log.action}</td>
+                  <td className="px-4 py-3 text-slate-600 hidden md:table-cell">{log.admin?.fullName}</td>
                   <td className="px-4 py-3 text-slate-500 hidden lg:table-cell text-xs">{log.reason || '—'}</td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">
+                  <td className="px-4 py-3 text-slate-600 text-xs">
                     {format(new Date(log.timestamp), 'dd/MM/yyyy HH:mm')}
                   </td>
                 </tr>

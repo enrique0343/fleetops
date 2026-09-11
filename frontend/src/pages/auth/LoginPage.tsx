@@ -25,65 +25,22 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6">
-      {/* Logo */}
-      <div className="mb-10 text-center">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-900/40">
-          <Truck className="w-8 h-8 text-white" />
-        </div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">FleetOps</h1>
-        <p className="text-slate-400 text-sm mt-1">Control de Transporte Corporativo</p>
-      </div>
-
-      {/* Form */}
-      <div className="w-full max-w-sm">
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-slate-100 mb-6">Iniciar sesión</h2>
-
-          {error && (
-            <div className="mb-4">
-              <Alert type="error" message={error} />
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Input
-              label="Correo electrónico"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="correo@empresa.com"
-              autoComplete="email"
-              required
-            />
-
-            <div className="relative">
-              <Input
-                label="Contraseña"
-                type={showPass ? 'text' : 'password'}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                autoComplete="current-password"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPass(!showPass)}
-                className="absolute right-4 bottom-3 text-slate-400 hover:text-slate-200 transition-colors"
-              >
-                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-
-            <Button type="submit" fullWidth loading={loading} size="lg">
-              {loading ? 'Ingresando...' : 'Ingresar'}
-            </Button>
-          </form>
-        </div>
-
-
-      </div>
+    <div className="login-page">
+      <section className="login-story">
+        <div className="fleet-brand"><span className="fleet-brand-icon"><Truck size={24} /></span><span>fleet<span className="brand-light">ops</span></span></div>
+        <div><p className="page-eyebrow">CONTROL DE TRANSPORTE</p><h1>Cada viaje.<br />Toda tu operación.</h1><p>Coordina viajes, da seguimiento a incidencias y mantén el control del combustible en un solo lugar.</p></div>
+        <small>FleetOps · Transporte corporativo</small>
+      </section>
+      <div className="login-form-panel"><div className="login-form">
+        <div className="fleet-brand login-mobile-brand"><span className="fleet-brand-icon"><Truck size={24} /></span><span>fleet<span className="brand-light">ops</span></span></div>
+        <h2>Bienvenido de nuevo</h2><p className="page-description">Ingresa con tu cuenta para continuar.</p>
+        {error && <Alert type="error" message={error} />}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <Input label="Correo electrónico" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="correo@empresa.com" autoComplete="email" required />
+          <div className="relative"><Input label="Contraseña" type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Ingresa tu contraseña" autoComplete="current-password" className="pr-14" required /><button type="button" aria-label={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'} aria-pressed={showPass} onClick={() => setShowPass(!showPass)} className="absolute right-2 bottom-1 p-3 text-slate-500 hover:text-slate-900">{showPass ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>
+          <Button type="submit" fullWidth loading={loading} size="lg">{loading ? 'Ingresando…' : 'Iniciar sesión'}</Button>
+        </form>
+      </div></div>
     </div>
   );
 }
