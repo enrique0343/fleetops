@@ -118,7 +118,7 @@ export interface Trip {
   originBranchId: string;
   originBranch?: Pick<Branch, 'id' | 'name'>;
   destinationId: string;
-  destination?: Pick<Location, 'id' | 'name' | 'type'>;
+  destination?: Pick<Location, 'id' | 'name' | 'type' | 'lat' | 'lng'>;
   closureBranchId?: string;
   closureBranch?: Pick<Branch, 'id' | 'name'>;
   status: TripStatus;

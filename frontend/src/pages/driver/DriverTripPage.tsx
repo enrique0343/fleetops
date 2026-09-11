@@ -1,9 +1,13 @@
-import { useState, useEffect, useCallback, lazy, Suspense, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense, type ReactNode } from 'react';
 import { useAuth } from '../../store/AuthContext';
 import api, { getErrorMessage } from '../../services/api';
 import { Trip, Branch, Vehicle, Location, IncidentType } from '../../types';
 import { Button, Select, Alert, Card, Modal, Textarea, Input } from '../../components/ui';
 import { parseVehicleQr } from '../../components/vehicleQr';
+import { DriverTripProgress } from '../../components/DriverTripProgress';
+import { useDriverTracking } from '../../hooks/useDriverTracking';
+import { coordinates, distanceMeters, POSITION_MAX_AGE_MS } from '../../services/tripProgress';
+import type { TripMapPoint } from '../../components/mapTypes';
 
 // El escáner usa html5-qrcode (pesado): se carga solo al abrirlo.
 const QrScanner = lazy(() =>
@@ -13,36 +17,12 @@ const QrScanner = lazy(() =>
 const LiveMap = lazy(() => import('../../components/LiveMap'));
 import {
   Play, Square, MapPin, AlertTriangle, Navigation,
-  Truck, Building2, CheckCircle2, History, Timer, ScanLine,
+  Truck, CheckCircle2, History, ScanLine,
 } from 'lucide-react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 
 type Phase = 'setup' | 'active';
 
 const LAST_TRIP_KEY = 'fleetops_last_trip_setup';
-
-// Hero visual por estado del viaje
-const statusHero: Record<string, { label: string; sub: string; classes: string; dot: string }> = {
-  IN_TRANSIT: {
-    label: 'En tránsito',
-    sub: 'Conduce con precaución',
-    classes: 'from-blue-600/30 to-blue-900/10 border-blue-700/50',
-    dot: 'bg-blue-400',
-  },
-  IN_STOP: {
-    label: 'En parada',
-    sub: 'Continúa cuando estés listo',
-    classes: 'from-amber-600/30 to-amber-900/10 border-amber-700/50',
-    dot: 'bg-amber-400',
-  },
-  IN_INCIDENT: {
-    label: 'Incidencia activa',
-    sub: 'Resuelve y continúa la ruta',
-    classes: 'from-red-600/30 to-red-900/10 border-red-700/50',
-    dot: 'bg-red-400',
-  },
-};
 
 function useElapsed(startedAt?: string) {
   const [, force] = useState(0);
@@ -66,6 +46,7 @@ export default function DriverTripPage() {
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [actionLoading, setActionLoading] = useState('');
   const [justFinished, setJustFinished] = useState(false);
 
@@ -99,56 +80,62 @@ export default function DriverTripPage() {
   const [finishComment, setFinishComment] = useState('');
 
   const elapsed = useElapsed(phase === 'active' ? activeTrip?.startedAt : undefined);
+  const tracking = useDriverTracking(phase === 'active' ? activeTrip?.id || null : null);
 
   // Mapa del recorrido del conductor (cerrado por defecto para ahorrar datos).
   const [showMap, setShowMap] = useState(false);
   const [track, setTrack] = useState<{ lat: number; lng: number }[]>([]);
+  const [trackError, setTrackError] = useState('');
+  useEffect(() => {
+    setTrack([]);
+    setTrackError('');
+    setShowMap(false);
+  }, [activeTrip?.id]);
   useEffect(() => {
     if (!showMap || phase !== 'active' || !activeTrip) return;
-    const load = () =>
-      api.get(`/trips/${activeTrip.id}/track`)
-        .then((r) => setTrack(r.data.data.path || []))
-        .catch(() => {});
+    const controller = new AbortController();
+    const load = () => api.get(`/trips/${activeTrip.id}/track`, { signal: controller.signal })
+      .then((r) => {
+        if (controller.signal.aborted) return;
+        setTrack(r.data.data.path || []);
+        setTrackError('');
+      }).catch(() => {
+        if (!controller.signal.aborted) setTrackError('No se pudo actualizar el recorrido guardado.');
+      });
     load();
     const id = setInterval(load, 60_000);
-    return () => clearInterval(id);
+    return () => { controller.abort(); clearInterval(id); };
   }, [showMap, phase, activeTrip?.id]);
 
-  // Rastreo en vivo: mientras el viaje está activo, reporta la posición cada
-  // 30s (captura del recorrido para trazabilidad por calles).
-  useEffect(() => {
-    if (phase !== 'active' || !activeTrip) return;
-    let stopped = false;
-    const sendPing = () => {
-      if (!navigator.geolocation || stopped) return;
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          if (stopped) return;
-          api.post(`/trips/${activeTrip.id}/ping`, {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          }).catch(() => { /* sin red: se reintenta en el siguiente ciclo */ });
-        },
-        () => { /* sin permiso de ubicación: no bloquear el viaje */ },
-        { timeout: 8000, maximumAge: 30000 }
-      );
-    };
-    sendPing();
-    const id = setInterval(sendPing, 30_000);
-    return () => { stopped = true; clearInterval(id); };
-  }, [phase, activeTrip?.id]);
+  const hasFreshFix = tracking.position != null && tracking.gps === 'live' &&
+    Date.now() - tracking.position.capturedAt <= POSITION_MAX_AGE_MS;
+  const mapPoints = useMemo(() => {
+    const start = coordinates(activeTrip?.startLat, activeTrip?.startLng) || tracking.firstPosition;
+    const last = tracking.position || coordinates(activeTrip?.lastLat, activeTrip?.lastLng) || track[track.length - 1];
+    const points: TripMapPoint[] = [];
+    if (start) points.push({ ...start, kind: 'start', label: 'Inicio del viaje' });
+    if (last) points.push({ ...last, kind: 'last', label: hasFreshFix ? 'Tu ubicación actual' : 'Última ubicación conocida' });
+    return points;
+  }, [activeTrip?.startLat, activeTrip?.startLng, activeTrip?.lastLat, activeTrip?.lastLng, tracking.firstPosition, tracking.position, hasFreshFix, track]);
+  const mapPath = useMemo(() => {
+    const last = tracking.position;
+    if (!last || !track.length || distanceMeters(track[track.length - 1], last) < 3) return track;
+    return [...track, { lat: last.lat, lng: last.lng }];
+  }, [track, tracking.position]);
 
   const loadActiveTrip = useCallback(async () => {
+    setLoadError('');
     try {
       const res = await api.get('/trips/my/active');
       if (res.data.data) {
         setActiveTrip(res.data.data);
         setPhase('active');
       } else {
+        setActiveTrip(null);
         setPhase('setup');
       }
     } catch {
-      setPhase('setup');
+      setLoadError('No pudimos comprobar si tienes un viaje activo. Reintenta para continuar.');
     } finally {
       setLoading(false);
     }
@@ -247,9 +234,12 @@ export default function DriverTripPage() {
         return;
       }
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (pos) => {
+          const point = coordinates(pos.coords.latitude, pos.coords.longitude);
+          resolve(point && Number.isFinite(pos.coords.accuracy) && pos.coords.accuracy <= 200 ? point : {});
+        },
         () => resolve({}),
-        { timeout: 5000 }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 }
       );
     });
 
@@ -272,7 +262,8 @@ export default function DriverTripPage() {
         destinationId,
         comment: finalComment,
         deviceTimestamp: new Date().toISOString(),
-        ...geo,
+        startLat: geo.lat,
+        startLng: geo.lng,
       });
       localStorage.setItem(LAST_TRIP_KEY, JSON.stringify({ destinationId }));
       setActiveTrip(res.data.data);
@@ -351,7 +342,8 @@ export default function DriverTripPage() {
         closureBranchId: finishBranchId || undefined,
         comment: finishComment || undefined,
         deviceTimestamp: new Date().toISOString(),
-        ...geo,
+        endLat: geo.lat,
+        endLng: geo.lng,
       });
       setActiveTrip(null);
       setPhase('setup');
@@ -380,6 +372,13 @@ export default function DriverTripPage() {
       </div>
     );
   }
+
+  if (loadError && !activeTrip) return (
+    <div className="p-4 space-y-4">
+      <Alert type="error" message={loadError} />
+      <Button fullWidth onClick={() => { setLoading(true); loadActiveTrip(); }}>Reintentar</Button>
+    </div>
+  );
 
   return (
     <div className="p-4 space-y-4">
@@ -563,45 +562,16 @@ export default function DriverTripPage() {
 
       {phase === 'active' && activeTrip && (
         <>
-          {/* Hero de estado con cronómetro en vivo */}
-          <div className={`rounded-3xl border bg-gradient-to-br p-5 ${(statusHero[activeTrip.status] || statusHero.IN_TRANSIT).classes}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${(statusHero[activeTrip.status] || statusHero.IN_TRANSIT).dot}`} />
-                <span className="text-white font-semibold">
-                  {(statusHero[activeTrip.status] || statusHero.IN_TRANSIT).label}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-white font-mono text-2xl font-bold tabular-nums">
-                <Timer className="w-5 h-5 opacity-60" />
-                {elapsed}
-              </div>
-            </div>
-            <p className="text-slate-300/80 text-xs mt-1.5">
-              {(statusHero[activeTrip.status] || statusHero.IN_TRANSIT).sub} · inicio{' '}
-              {format(new Date(activeTrip.startedAt), 'HH:mm', { locale: es })}
-            </p>
-
-            {/* Ruta resumida */}
-            <div className="mt-4 flex items-center gap-2 text-sm">
-              <span className="flex items-center gap-1.5 text-slate-200 min-w-0">
-                <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
-                <span className="truncate">{activeTrip.originBranch?.name || 'Origen GPS'}</span>
-              </span>
-              <span className="text-slate-500 shrink-0">→</span>
-              <span className="flex items-center gap-1.5 text-white font-medium min-w-0">
-                <MapPin className="w-4 h-4 text-slate-300 shrink-0" />
-                <span className="truncate">{activeTrip.destination?.name || '—'}</span>
-              </span>
-            </div>
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
-              <Truck className="w-3.5 h-3.5" />
-              {activeTrip.vehicle
-                ? `${activeTrip.vehicle.plate} · ${activeTrip.vehicle.brand} ${activeTrip.vehicle.model}`
-                : '—'}
-              {activeTrip.comment && <span className="truncate"> · {activeTrip.comment}</span>}
-            </div>
-          </div>
+          <DriverTripProgress
+            trip={activeTrip}
+            destination={locations.find((location) => location.id === activeTrip.destinationId)}
+            position={tracking.position}
+            firstPosition={tracking.firstPosition}
+            gps={tracking.gps}
+            sync={tracking.sync}
+            elapsed={elapsed}
+            onRetry={tracking.retry}
+          />
 
           {/* Mi recorrido (trazabilidad visual del conductor) */}
           <div>
@@ -610,28 +580,16 @@ export default function DriverTripPage() {
               className="w-full flex items-center justify-center gap-2 text-sm text-slate-300 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 hover:border-slate-500 transition-colors"
             >
               <MapPin className="w-4 h-4 text-blue-400" />
-              {showMap ? 'Ocultar mi recorrido' : 'Ver mi recorrido'}
+              {showMap ? 'Ocultar mapa del recorrido' : 'Ver mapa del recorrido'}
             </button>
+            {trackError && showMap && <div className="mt-3"><Alert type="warning" message={trackError} /></div>}
             {showMap && (
               <div className="mt-3">
                 <Suspense fallback={<div className="w-full h-72 rounded-2xl bg-slate-800 animate-pulse" />}>
-                  <LiveMap
-                    path={track}
-                    points={[
-                      activeTrip.startLat != null && activeTrip.startLng != null
-                        ? { lat: activeTrip.startLat, lng: activeTrip.startLng, label: '🚀 Inicio', kind: 'start' as const }
-                        : null,
-                      activeTrip.lastLat != null && activeTrip.lastLng != null
-                        ? { lat: activeTrip.lastLat, lng: activeTrip.lastLng, label: '🚛 Tú estás aquí', kind: 'last' as const }
-                        : null,
-                      ...(track.length > 0 && activeTrip.lastLat == null
-                        ? [{ lat: track[track.length - 1].lat, lng: track[track.length - 1].lng, label: '🚛 Tú estás aquí', kind: 'last' as const }]
-                        : []),
-                    ].filter((p): p is NonNullable<typeof p> => p !== null)}
-                  />
+                  <LiveMap path={mapPath} points={mapPoints} />
                 </Suspense>
                 <p className="text-xs text-slate-500 text-center mt-2">
-                  La línea azul es tu trayecto reportado · se actualiza cada minuto
+                  Tu ubicación cambia con el GPS. El recorrido guardado se consulta cada minuto.
                 </p>
               </div>
             )}
