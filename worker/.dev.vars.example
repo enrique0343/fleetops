@@ -1,0 +1,7 @@
+# Copy to .dev.vars for local `wrangler dev` (these are loaded as secrets locally).
+# NEVER commit .dev.vars
+JWT_SECRET="change-me-min-32-chars-long-secret-value"
+SEED_TOKEN="change-me-one-time-seed-token"
+# Optional Telegram notifications (system works without them)
+TELEGRAM_BOT_TOKEN=""
+TELEGRAM_CHAT_ID=""

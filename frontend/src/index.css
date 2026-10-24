@@ -7,7 +7,8 @@
 }
 
 html {
-  font-family: 'Inter', system-ui, sans-serif;
+  /* Tipografía institucional Avante */
+  font-family: 'Century Gothic', 'CenturyGothic', 'AppleGothic', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -65,3 +66,186 @@ select {
 button, a, input, select, textarea {
   transition: all 150ms ease;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   TEMA CLARO INSTITUCIONAL AVANTE (.theme-light)
+   Aplica al área de administración. Remapea las utilidades oscuras
+   al sistema visual institucional: neutrales dominantes, acentos
+   azul marino/turquesa, hairlines #E5E5E5, radios sobrios.
+   ══════════════════════════════════════════════════════════════ */
+
+.theme-light {
+  background-color: #fafafa;
+  color: #1a1a1a;
+  color-scheme: light;
+}
+
+/* ── Scrollbar claro ── */
+.theme-light ::-webkit-scrollbar-thumb { background: #d4d4d4; }
+.theme-light ::-webkit-scrollbar-thumb:hover { background: #b8b8b8; }
+
+/* ── Select arrow oscuro sobre claro ── */
+.theme-light select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234A4A4A'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+}
+
+/* ── Radios sobrios institucionales (máx. discreto) ── */
+.theme-light .rounded-3xl { border-radius: 8px; }
+.theme-light .rounded-2xl { border-radius: 6px; }
+.theme-light .rounded-xl  { border-radius: 4px; }
+.theme-light .rounded-lg  { border-radius: 4px; }
+
+/* ── Superficies ── */
+.theme-light .bg-slate-900,
+.theme-light .bg-slate-900\/95 { background-color: #fafafa; }
+.theme-light .bg-slate-800 { background-color: #ffffff; }
+.theme-light .bg-slate-800\/50,
+.theme-light .bg-slate-800\/60 { background-color: #fafafa; }
+.theme-light .bg-slate-700,
+.theme-light .bg-slate-700\/70,
+.theme-light .bg-slate-700\/60,
+.theme-light .bg-slate-700\/40 { background-color: #f4f4f4; }
+.theme-light .bg-slate-500\/15 { background-color: #f4f4f4; }
+.theme-light .hover\:bg-slate-750:hover,
+.theme-light .hover\:bg-slate-700\/40:hover { background-color: #f4f4f4; }
+.theme-light .hover\:bg-slate-800:hover { background-color: #f4f4f4; }
+.theme-light .hover\:bg-slate-600:hover { background-color: #e5e5e5; }
+
+/* ── Bordes → hairlines ── */
+.theme-light .border-slate-700,
+.theme-light .border-slate-700\/50,
+.theme-light .border-slate-600,
+.theme-light .border-slate-800 { border-color: #e5e5e5; }
+.theme-light .divide-slate-700\/50 > :not([hidden]) ~ :not([hidden]),
+.theme-light .divide-slate-700 > :not([hidden]) ~ :not([hidden]) { border-color: #ededed; }
+.theme-light .hover\:border-slate-600:hover,
+.theme-light .hover\:border-slate-500:hover { border-color: #b8b8b8; }
+
+/* ── Texto → escala de neutrales institucional ── */
+.theme-light .text-white,
+.theme-light .text-slate-100,
+.theme-light .text-slate-200 { color: #1a1a1a; }
+.theme-light .text-slate-300 { color: #4a4a4a; }
+.theme-light .text-slate-400 { color: #4a4a4a; }
+.theme-light .text-slate-500 { color: #6b7280; }
+.theme-light .text-slate-600 { color: #9ca3af; }
+.theme-light .hover\:text-white:hover,
+.theme-light .hover\:text-slate-200:hover { color: #1a1a1a; }
+.theme-light .placeholder-slate-500::placeholder { color: #9ca3af; }
+
+/* ── Acento primario: azul → azul marino institucional ── */
+.theme-light .text-blue-400,
+.theme-light .text-blue-300,
+.theme-light .text-blue-500 { color: #1a2b4a; }
+.theme-light .hover\:text-blue-300:hover,
+.theme-light .hover\:text-blue-400:hover { color: #5b9ba8; }
+.theme-light .bg-blue-600,
+.theme-light .bg-blue-500 { background-color: #1a2b4a; }
+.theme-light .hover\:bg-blue-700:hover { background-color: #14213a; }
+.theme-light .bg-blue-900\/50,
+.theme-light .bg-blue-900\/40,
+.theme-light .bg-blue-900\/30,
+.theme-light .bg-blue-950\/40,
+.theme-light .bg-blue-950\/10,
+.theme-light .bg-blue-500\/15,
+.theme-light .bg-blue-500\/20 { background-color: #eef1f6; }
+.theme-light .border-blue-700,
+.theme-light .border-blue-800,
+.theme-light .border-blue-800\/50,
+.theme-light .border-blue-600\/60,
+.theme-light .border-blue-700\/50 { border-color: #c6cedd; }
+.theme-light .border-blue-500 { border-color: #1a2b4a; }
+.theme-light .ring-blue-500 { --tw-ring-color: #1a2b4a; }
+.theme-light .focus\:ring-blue-500:focus { --tw-ring-color: #1a2b4a; }
+.theme-light .accent-blue-500 { accent-color: #1a2b4a; }
+
+/* ── Éxito: emerald → verde bosque ── */
+.theme-light .text-emerald-400,
+.theme-light .text-emerald-300,
+.theme-light .text-emerald-300\/70,
+.theme-light .text-emerald-300\/80 { color: #1f5740; }
+.theme-light .bg-emerald-600,
+.theme-light .bg-emerald-500,
+.theme-light .bg-emerald-400 { background-color: #1f5740; }
+.theme-light .hover\:bg-emerald-700:hover { background-color: #17422f; }
+.theme-light .bg-emerald-900\/50,
+.theme-light .bg-emerald-900\/40,
+.theme-light .bg-emerald-900\/30,
+.theme-light .bg-emerald-950\/40,
+.theme-light .bg-emerald-500\/15 { background-color: #edf3f0; }
+.theme-light .border-emerald-700,
+.theme-light .border-emerald-800,
+.theme-light .border-emerald-800\/50,
+.theme-light .border-emerald-700\/50 { border-color: #c3d6cc; }
+
+/* ── Alerta moderada: amber → ámbar institucional ── */
+.theme-light .text-amber-400,
+.theme-light .text-amber-300,
+.theme-light .text-amber-400\/80,
+.theme-light .text-amber-300\/80 { color: #8a6420; }
+.theme-light .bg-amber-500,
+.theme-light .bg-amber-600 { background-color: #b8862e; }
+.theme-light .hover\:bg-amber-600:hover { background-color: #9a7026; }
+.theme-light .bg-amber-900\/50,
+.theme-light .bg-amber-900\/40,
+.theme-light .bg-amber-900\/30,
+.theme-light .bg-amber-900\/20,
+.theme-light .bg-amber-950\/50,
+.theme-light .bg-amber-950\/40,
+.theme-light .bg-amber-950\/30,
+.theme-light .bg-amber-950\/20,
+.theme-light .bg-amber-500\/15,
+.theme-light .bg-amber-500\/20 { background-color: #f8f2e5; }
+.theme-light .border-amber-700,
+.theme-light .border-amber-800,
+.theme-light .border-amber-800\/50,
+.theme-light .border-amber-800\/60,
+.theme-light .border-amber-800\/40,
+.theme-light .border-amber-700\/60,
+.theme-light .border-amber-600,
+.theme-light .hover\:border-amber-600:hover { border-color: #e2d3af; }
+
+/* ── Crítico: red → rojo carbón ── */
+.theme-light .text-red-400,
+.theme-light .text-red-300,
+.theme-light .text-red-500 { color: #a0322d; }
+.theme-light .hover\:text-red-300:hover,
+.theme-light .hover\:text-red-400:hover { color: #b8443a; }
+.theme-light .bg-red-600,
+.theme-light .bg-red-500,
+.theme-light .bg-red-700 { background-color: #a0322d; }
+.theme-light .hover\:bg-red-700:hover { background-color: #872a26; }
+.theme-light .bg-red-900\/50,
+.theme-light .bg-red-900\/40,
+.theme-light .bg-red-900\/30,
+.theme-light .bg-red-900\/20,
+.theme-light .bg-red-950\/50,
+.theme-light .bg-red-950\/30,
+.theme-light .bg-red-950\/20,
+.theme-light .bg-red-500\/15,
+.theme-light .hover\:bg-red-900\/20:hover { background-color: #f7ebea; }
+.theme-light .border-red-700,
+.theme-light .border-red-800,
+.theme-light .border-red-700\/60,
+.theme-light .border-red-800\/60,
+.theme-light .hover\:border-red-600:hover { border-color: #e3c4c1; }
+.theme-light .border-red-500 { border-color: #a0322d; }
+
+/* ── Series terciarias: purple/indigo → violeta apagado ── */
+.theme-light .text-purple-400,
+.theme-light .text-purple-300,
+.theme-light .text-indigo-300 { color: #7a6b8e; }
+.theme-light .bg-purple-900\/40,
+.theme-light .bg-purple-900\/20,
+.theme-light .bg-purple-500\/15,
+.theme-light .bg-indigo-900\/50,
+.theme-light .bg-indigo-900\/40 { background-color: #f1eff4; }
+.theme-light .border-indigo-700,
+.theme-light .border-indigo-800,
+.theme-light .border-purple-800\/40 { border-color: #d6d0df; }
+
+/* ── Focus ring offset sobre claro ── */
+.theme-light .focus\:ring-offset-slate-900:focus { --tw-ring-offset-color: #fafafa; }
+
+/* ── Sombra suave institucional para superficies elevadas ── */
+.theme-light .bg-slate-800.border { box-shadow: 0 1px 2px rgba(26, 26, 26, 0.04); }

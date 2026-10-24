@@ -1,5 +1,5 @@
-import { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes } from 'react';
-import { Loader2, AlertCircle, CheckCircle, Info, XCircle } from 'lucide-react';
+import { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes, useEffect } from 'react';
+import { Loader2, AlertCircle, CheckCircle, Info, XCircle, X, AlertTriangle } from 'lucide-react';
 
 // ─────────────────────────────────────────────
 // Button
@@ -278,26 +278,117 @@ interface ModalProps {
   open: boolean;
   onClose: () => void;
   title: string;
+  subtitle?: string;
   children: ReactNode;
   footer?: ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-export function Modal({ open, onClose, title, children, footer }: ModalProps) {
+const modalSizes = {
+  sm: 'sm:max-w-sm',
+  md: 'sm:max-w-lg',
+  lg: 'sm:max-w-2xl',
+  xl: 'sm:max-w-4xl',
+};
+
+export function Modal({ open, onClose, title, subtitle, children, footer, size = 'md' }: ModalProps) {
+  // Cerrar con Escape y bloquear el scroll de fondo mientras está abierto.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full sm:max-w-lg bg-slate-800 border border-slate-700 rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-5 border-b border-slate-700">
-          <h3 className="text-base font-semibold text-slate-100">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors p-1">
-            <XCircle className="w-5 h-5" />
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] animate-backdrop-in" onClick={onClose} />
+      <div className={[
+        'relative z-10 w-full bg-slate-800 border border-slate-700 flex flex-col',
+        'max-h-[92vh] sm:max-h-[85vh] shadow-2xl',
+        'rounded-t-2xl sm:rounded-2xl animate-sheet-in sm:animate-modal-in',
+        modalSizes[size],
+      ].join(' ')}>
+        {/* Asa visual en móvil (bottom sheet) */}
+        <div className="sm:hidden pt-2.5 flex justify-center">
+          <span className="w-9 h-1 rounded-full bg-slate-600" />
+        </div>
+        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-slate-700">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-slate-100 leading-snug">{title}</h3>
+            {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="shrink-0 -mr-1 -mt-0.5 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+          >
+            <X className="w-4.5 h-4.5 w-[18px] h-[18px]" />
           </button>
         </div>
-        <div className="p-5 overflow-y-auto flex-1">{children}</div>
-        {footer && <div className="p-5 border-t border-slate-700">{footer}</div>}
+        <div className="px-5 py-5 overflow-y-auto flex-1 overscroll-contain">{children}</div>
+        {footer && <div className="px-5 py-4 border-t border-slate-700 bg-slate-800/50">{footer}</div>}
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// ConfirmDialog — confirmación elegante para acciones importantes
+// ─────────────────────────────────────────────
+
+interface ConfirmDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  detail?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: 'primary' | 'danger' | 'success' | 'warning';
+  loading?: boolean;
+}
+
+const confirmTone = {
+  primary: { icon: Info, iconWrap: 'bg-blue-500/15 text-blue-400', button: 'primary' as const },
+  danger: { icon: AlertTriangle, iconWrap: 'bg-red-500/15 text-red-400', button: 'danger' as const },
+  success: { icon: CheckCircle, iconWrap: 'bg-emerald-500/15 text-emerald-400', button: 'success' as const },
+  warning: { icon: AlertTriangle, iconWrap: 'bg-amber-500/15 text-amber-400', button: 'warning' as const },
+};
+
+export function ConfirmDialog({
+  open, onClose, onConfirm, title, message, detail,
+  confirmLabel = 'Confirmar', cancelLabel = 'Cancelar',
+  tone = 'primary', loading = false,
+}: ConfirmDialogProps) {
+  const t = confirmTone[tone];
+  const Icon = t.icon;
+  return (
+    <Modal open={open} onClose={onClose} title={title} size="sm"
+      footer={
+        <div className="flex gap-3">
+          <Button variant="ghost" fullWidth onClick={onClose} disabled={loading}>{cancelLabel}</Button>
+          <Button variant={t.button} fullWidth onClick={onConfirm} loading={loading}>{confirmLabel}</Button>
+        </div>
+      }
+    >
+      <div className="flex items-start gap-4">
+        <span className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${t.iconWrap}`}>
+          <Icon className="w-5 h-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm text-slate-200 leading-relaxed">{message}</p>
+          {detail && <p className="text-xs text-slate-400 mt-2 leading-relaxed">{detail}</p>}
+        </div>
+      </div>
+    </Modal>
   );
 }
 

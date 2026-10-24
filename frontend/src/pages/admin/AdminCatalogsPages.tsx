@@ -1,9 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import api, { getErrorMessage } from '../../services/api';
 import { User, Vehicle, Branch, Location } from '../../types';
 import { Button, Input, Select, Card, Alert, Modal, Textarea, StatusBadge } from '../../components/ui';
-import { Plus, Pencil, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Pencil, ToggleLeft, ToggleRight, QrCode, Camera, MapPin } from 'lucide-react';
+import { resizeImageToDataUrl } from '../../lib/image';
+import { AddressSearch } from '../../components/AddressSearch';
 import { format } from 'date-fns';
+const VehicleQrModal = lazy(() =>
+  import('../../components/VehicleQrModal').then((m) => ({ default: m.VehicleQrModal }))
+);
 
 // ════════════════════════════════════════
 // USERS MANAGEMENT
@@ -128,7 +133,19 @@ export function AdminUsersPage() {
                 <tr><td colSpan={6} className="text-center py-8 text-slate-500">Cargando...</td></tr>
               ) : users.map(user => (
                 <tr key={user.id} className="hover:bg-slate-750 transition-colors">
-                  <td className="px-4 py-3 text-slate-200 font-medium">{user.fullName}</td>
+                  <td className="px-4 py-3 text-slate-200 font-medium">
+                    <span className="flex items-center gap-2.5">
+                      {user.photoUrl ? (
+                        <img src={user.photoUrl} alt={user.fullName}
+                          className="w-8 h-8 rounded-lg object-cover border border-slate-600 shrink-0" />
+                      ) : (
+                        <span className="w-8 h-8 rounded-lg bg-slate-700 text-slate-300 text-xs font-bold flex items-center justify-center shrink-0">
+                          {user.fullName?.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      {user.fullName}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-slate-400 hidden md:table-cell">{user.email}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-1 rounded ${user.role === 'ADMIN' ? 'bg-purple-900/40 text-purple-300' : 'bg-blue-900/40 text-blue-300'}`}>
@@ -366,10 +383,14 @@ export function AdminLocationsPage() {
             onChange={e => setForm(p => ({ ...p, addressRef: e.target.value }))}
             placeholder="Dirección legible"
           />
-          <div className="flex gap-3">
-            <Input label="Latitud" type="number" step="any" value={form.lat} onChange={e => setForm(p => ({ ...p, lat: e.target.value }))} placeholder="0.000000" />
-            <Input label="Longitud" type="number" step="any" value={form.lng} onChange={e => setForm(p => ({ ...p, lng: e.target.value }))} placeholder="0.000000" />
-          </div>
+          <AddressSearch
+            label="Buscar en el mapa (fija coordenadas)"
+            placeholder="Ej. Hospital Central, Av. X…"
+            value={form.lat && form.lng ? { name: form.addressRef || 'Coordenadas fijadas', lat: Number(form.lat), lng: Number(form.lng) } : null}
+            onChange={(r) => setForm(p => r
+              ? { ...p, lat: String(r.lat), lng: String(r.lng), addressRef: p.addressRef || r.name }
+              : { ...p, lat: '', lng: '' })}
+          />
           {editLoc && (
             <div className="flex items-center gap-3">
               <input type="checkbox" id="locActive" checked={form.isActive} onChange={e => setForm(p => ({ ...p, isActive: e.target.checked }))} className="accent-blue-500" />
@@ -395,8 +416,19 @@ export function AdminVehiclesPage() {
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const emptyForm = { plate: '', model: '', brand: '', year: '', vehicleType: '', branchId: '', fuelType: '', color: '', isActive: true };
+  const emptyForm = { plate: '', model: '', brand: '', year: '', vehicleType: '', branchId: '', fuelType: '', color: '', isActive: true, isAmbulance: false, hasStretcher: false, hasOxygen: false, photoUrl: '' as string };
   const [form, setForm] = useState(emptyForm);
+  const [qrVehicle, setQrVehicle] = useState<Vehicle | null>(null);
+
+  const handleVehiclePhoto = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 640, 0.8);
+      setForm(p => ({ ...p, photoUrl: dataUrl }));
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  };
 
   const load = async () => {
     const [vRes, bRes] = await Promise.all([api.get('/catalogs/vehicles'), api.get('/catalogs/branches')]);
@@ -409,7 +441,7 @@ export function AdminVehiclesPage() {
   const openCreate = () => { setEditVehicle(null); setForm(emptyForm); setShowModal(true); };
   const openEdit = (v: Vehicle) => {
     setEditVehicle(v);
-    setForm({ plate: v.plate, model: v.model, brand: v.brand, year: v.year?.toString() || '', vehicleType: v.vehicleType || '', branchId: v.branchId || '', fuelType: v.fuelType || '', color: v.color || '', isActive: v.isActive });
+    setForm({ plate: v.plate, model: v.model, brand: v.brand, year: v.year?.toString() || '', vehicleType: v.vehicleType || '', branchId: v.branchId || '', fuelType: v.fuelType || '', color: v.color || '', isActive: v.isActive, isAmbulance: v.isAmbulance ?? false, hasStretcher: v.hasStretcher ?? false, hasOxygen: v.hasOxygen ?? false, photoUrl: v.photoUrl || '' });
     setShowModal(true);
   };
 
@@ -417,7 +449,7 @@ export function AdminVehiclesPage() {
     setSaving(true);
     setError('');
     try {
-      const data = { ...form, year: form.year ? parseInt(form.year) : null, branchId: form.branchId || null, reason: 'Edición desde admin' };
+      const data = { ...form, year: form.year ? parseInt(form.year) : null, branchId: form.branchId || null, serviceClass: form.isAmbulance ? 'AMBULANCE' : 'ADMIN', reason: 'Edición desde admin' };
       if (editVehicle) await api.patch(`/catalogs/vehicles/${editVehicle.id}`, data);
       else await api.post('/catalogs/vehicles', data);
       setSuccess(editVehicle ? 'Vehículo actualizado' : 'Vehículo creado');
@@ -442,14 +474,24 @@ export function AdminVehiclesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {vehicles.map(v => (
           <Card key={v.id} className={!v.isActive ? 'opacity-50' : ''}>
+            {v.photoUrl && (
+              <img src={v.photoUrl} alt={v.plate}
+                className="w-full h-32 object-cover rounded-xl mb-3 border border-slate-700" />
+            )}
             <div className="flex justify-between">
               <div>
                 <p className="font-mono font-bold text-slate-100">{v.plate}</p>
                 <p className="text-slate-400 text-sm">{v.brand} {v.model} {v.year && `(${v.year})`}</p>
               </div>
-              <button onClick={() => openEdit(v)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-4 h-4" /></button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setQrVehicle(v)} className="text-slate-500 hover:text-emerald-400 transition-colors" title="Código QR"><QrCode className="w-4 h-4" /></button>
+                <button onClick={() => openEdit(v)} className="text-slate-500 hover:text-blue-400 transition-colors" title="Editar"><Pencil className="w-4 h-4" /></button>
+              </div>
             </div>
             <div className="mt-2 flex gap-2 flex-wrap">
+              {v.isAmbulance && <span className="text-xs bg-red-900/40 text-red-300 px-2 py-0.5 rounded">🚑 Ambulancia</span>}
+              {v.hasStretcher && <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">Camilla</span>}
+              {v.hasOxygen && <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">O₂</span>}
               {v.vehicleType && <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">{v.vehicleType}</span>}
               {v.fuelType && <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">{v.fuelType}</span>}
               {v.currentTripId && <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded">En uso</span>}
@@ -473,6 +515,39 @@ export function AdminVehiclesPage() {
           </div>
           <Select label="Tipo de combustible" value={form.fuelType} onChange={e => setForm(p => ({ ...p, fuelType: e.target.value }))} placeholder="Seleccionar..." options={[{ value: 'Gasolina', label: 'Gasolina' }, { value: 'Diesel', label: 'Diesel' }, { value: 'Gas LP', label: 'Gas LP' }]} />
           <Select label="Sucursal" value={form.branchId} onChange={e => setForm(p => ({ ...p, branchId: e.target.value }))} placeholder="Sin sucursal" options={branches.map(b => ({ value: b.id, label: b.name }))} />
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Foto del vehículo</label>
+            <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-slate-700 bg-slate-800/50 p-3 hover:border-slate-500 transition-colors">
+              {form.photoUrl ? (
+                <img src={form.photoUrl} alt="Foto" className="w-16 h-16 object-cover rounded-lg border border-slate-600" />
+              ) : (
+                <span className="w-16 h-16 rounded-lg bg-slate-700 flex items-center justify-center">
+                  <Camera className="w-5 h-5 text-slate-400" />
+                </span>
+              )}
+              <span className="text-sm text-slate-300">{form.photoUrl ? 'Cambiar foto' : 'Subir foto de la unidad'}</span>
+              <input type="file" accept="image/*" className="hidden" onChange={e => handleVehiclePhoto(e.target.files?.[0])} />
+            </label>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-3 space-y-2">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Capacidades de ambulancia</p>
+            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={form.isAmbulance} onChange={e => setForm(p => ({ ...p, isAmbulance: e.target.checked }))} className="accent-red-500" />
+              Es ambulancia (elegible para traslados de paciente)
+            </label>
+            {form.isAmbulance && (
+              <div className="flex gap-4 pl-6">
+                <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked={form.hasStretcher} onChange={e => setForm(p => ({ ...p, hasStretcher: e.target.checked }))} className="accent-blue-500" />
+                  Camilla
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked={form.hasOxygen} onChange={e => setForm(p => ({ ...p, hasOxygen: e.target.checked }))} className="accent-blue-500" />
+                  Oxígeno
+                </label>
+              </div>
+            )}
+          </div>
           {editVehicle && (
             <div className="flex items-center gap-3">
               <input type="checkbox" checked={form.isActive} onChange={e => setForm(p => ({ ...p, isActive: e.target.checked }))} className="accent-blue-500" id="vActive" />
@@ -481,6 +556,11 @@ export function AdminVehiclesPage() {
           )}
         </div>
       </Modal>
+      {qrVehicle && (
+        <Suspense fallback={null}>
+          <VehicleQrModal open={!!qrVehicle} onClose={() => setQrVehicle(null)} vehicle={qrVehicle} />
+        </Suspense>
+      )}
     </div>
   );
 }
@@ -496,7 +576,8 @@ export function AdminBranchesPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', address: '', isActive: true });
+  const [geocoding, setGeocoding] = useState(false);
+  const [form, setForm] = useState({ name: '', code: '', address: '', lat: '', lng: '', isActive: true });
 
   const load = async () => {
     const res = await api.get('/catalogs/branches');
@@ -505,15 +586,16 @@ export function AdminBranchesPage() {
 
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => { setEditBranch(null); setForm({ name: '', code: '', address: '', isActive: true }); setShowModal(true); };
-  const openEdit = (b: Branch) => { setEditBranch(b); setForm({ name: b.name, code: b.code, address: b.address || '', isActive: b.isActive }); setShowModal(true); };
+  const openCreate = () => { setEditBranch(null); setForm({ name: '', code: '', address: '', lat: '', lng: '', isActive: true }); setShowModal(true); };
+  const openEdit = (b: Branch) => { setEditBranch(b); setForm({ name: b.name, code: b.code, address: b.address || '', lat: b.lat != null ? String(b.lat) : '', lng: b.lng != null ? String(b.lng) : '', isActive: b.isActive }); setShowModal(true); };
 
   const handleSave = async () => {
     setSaving(true);
     setError('');
     try {
-      if (editBranch) await api.patch(`/catalogs/branches/${editBranch.id}`, form);
-      else await api.post('/catalogs/branches', form);
+      const payload = { ...form, lat: form.lat ? Number(form.lat) : null, lng: form.lng ? Number(form.lng) : null };
+      if (editBranch) await api.patch(`/catalogs/branches/${editBranch.id}`, payload);
+      else await api.post('/catalogs/branches', payload);
       setSuccess(editBranch ? 'Sucursal actualizada' : 'Sucursal creada');
       setShowModal(false);
       await load();
@@ -524,9 +606,25 @@ export function AdminBranchesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-3 flex-wrap">
         <div><h1 className="text-2xl font-bold text-white">Sucursales</h1></div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>Nueva sucursal</Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" icon={<MapPin className="w-4 h-4" />} loading={geocoding}
+            onClick={async () => {
+              setGeocoding(true); setError('');
+              try {
+                const r = await api.post('/catalogs/branches/geocode-all', {});
+                const d = r.data.data;
+                setSuccess(`Coordenadas resueltas: ${d.updated}/${d.total}${d.failed.length ? ` · sin resultado: ${d.failed.join(', ')}` : ''}`);
+                await load();
+                setTimeout(() => setSuccess(''), 6000);
+              } catch (err) { setError(getErrorMessage(err)); }
+              finally { setGeocoding(false); }
+            }}>
+            Autocompletar coordenadas
+          </Button>
+          <Button icon={<Plus className="w-4 h-4" />} onClick={openCreate}>Nueva sucursal</Button>
+        </div>
       </div>
       {success && <Alert type="success" message={success} />}
       {error && <Alert type="error" message={error} />}
@@ -541,6 +639,11 @@ export function AdminBranchesPage() {
               <button onClick={() => openEdit(b)} className="text-slate-500 hover:text-blue-400 transition-colors"><Pencil className="w-4 h-4" /></button>
             </div>
             {b.address && <p className="text-slate-500 text-xs mt-2">{b.address}</p>}
+            <p className="text-xs mt-1.5">
+              {b.lat != null && b.lng != null
+                ? <span className="text-emerald-400">📍 Ubicación configurada</span>
+                : <span className="text-amber-400">⚠ Sin coordenadas (no autodetecta)</span>}
+            </p>
           </Card>
         ))}
       </div>
@@ -551,6 +654,14 @@ export function AdminBranchesPage() {
           <Input label="Nombre *" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
           <Input label="Código (único) *" value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} disabled={!!editBranch} />
           <Input label="Dirección" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
+          <AddressSearch
+            label="Ubicación en el mapa (para autodetección por GPS)"
+            placeholder="Buscar la dirección de la sucursal…"
+            value={form.lat && form.lng ? { name: form.address || 'Coordenadas fijadas', lat: Number(form.lat), lng: Number(form.lng) } : null}
+            onChange={(r) => setForm(p => r
+              ? { ...p, lat: String(r.lat), lng: String(r.lng), address: p.address || r.name }
+              : { ...p, lat: '', lng: '' })}
+          />
           {editBranch && (
             <div className="flex items-center gap-3">
               <input type="checkbox" checked={form.isActive} onChange={e => setForm(p => ({ ...p, isActive: e.target.checked }))} className="accent-blue-500" id="brActive" />
@@ -577,7 +688,8 @@ export function AdminAuditPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/audit?limit=50').then(res => setLogs(res.data.data || [])).finally(() => setLoading(false));
+    // El backend pagina: { success, data: { data: [...], total, ... } }
+    api.get('/audit?limit=50').then(res => setLogs(res.data.data?.data || [])).finally(() => setLoading(false));
   }, []);
 
   return (

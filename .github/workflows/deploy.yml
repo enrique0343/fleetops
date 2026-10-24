@@ -1,0 +1,66 @@
+# Despliegue automático a Cloudflare (Worker + D1 + Pages)
+# Se ejecuta en cada push a la rama de desarrollo, o manualmente
+# desde la pestaña Actions ("Run workflow").
+#
+# Requiere UN secreto del repositorio (Settings → Secrets → Actions):
+#   CLOUDFLARE_API_TOKEN  — token con permisos: Workers Scripts:Edit,
+#                           D1:Edit, Cloudflare Pages:Edit
+
+name: Deploy Cloudflare
+
+on:
+  push:
+    branches: [claude/awesome-bell-EAOwD, main]
+  workflow_dispatch: {}
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: 4cf0b376d1359fd81e861160f81af1c0
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+concurrency:
+  group: deploy-cloudflare
+  cancel-in-progress: false
+
+jobs:
+  api:
+    name: API (Worker + migraciones D1)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Aplicar migraciones D1 (remoto)
+        run: npx wrangler d1 migrations apply fleetops --remote
+      - name: Desplegar Worker
+        run: npm run deploy
+
+  frontend:
+    name: Frontend (Pages)
+    runs-on: ubuntu-latest
+    needs: api # el worker sale primero para que el front nunca apunte a una API vieja
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Build
+        run: |
+          echo 'VITE_API_URL="https://fleetops-api.enrique0343.workers.dev"' > .env.production
+          npm run build
+      - name: Desplegar a Pages (producción)
+        run: npx wrangler pages deploy dist --project-name fleetops-frontend --branch claude/awesome-bell-EAOwD --commit-dirty=true
