@@ -35,6 +35,10 @@ async function sendTelegram(env: Bindings, message: string): Promise<SendResult>
   }
 }
 
+// El mensaje va con parse_mode HTML: todo texto capturado por usuarios se escapa.
+const esc = (v: unknown) =>
+  String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 function formatTripMessage(trip: any): string {
   const duration = trip.durationMinutes
     ? `${Math.floor(trip.durationMinutes / 60)}h ${trip.durationMinutes % 60}m`
@@ -43,13 +47,13 @@ function formatTripMessage(trip: any): string {
   return `
 🚛 <b>Viaje Finalizado</b>
 
-👤 Conductor: ${trip.driver.fullName}
-🚗 Vehículo: ${trip.vehicle.plate}
-📍 Origen: ${trip.originBranch.name}
-🎯 Destino: ${trip.destination.name}
+👤 Conductor: ${esc(trip.driver?.fullName)}
+🚗 Vehículo: ${esc(trip.vehicle?.plate)}
+📍 Origen: ${esc(trip.originBranch?.name ?? 'Punto GPS de inicio')}
+🎯 Destino: ${esc(trip.destination?.name)}
 ⏱ Duración: ${duration}
-📅 Finalizado: ${trip.finishedAt ? new Date(trip.finishedAt).toLocaleString('es') : 'N/A'}
-${trip.comment ? `💬 Comentario: ${trip.comment}` : ''}
+📅 Finalizado: ${trip.finishedAt ? new Date(trip.finishedAt).toLocaleString('es-SV', { timeZone: 'America/El_Salvador' }) : 'N/A'}
+${trip.comment ? `💬 Comentario: ${esc(trip.comment)}` : ''}
   `.trim();
 }
 

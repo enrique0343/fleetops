@@ -53,7 +53,10 @@ export default function TripMap({ points, path = [] }: { points: TripMapPoint[];
         fillOpacity: 0.85,
         weight: p.kind === 'last' ? 3 : 2,
       }).addTo(map);
-      marker.bindPopup(p.label);
+      // La etiqueta se muestra como texto: puede contener nombres capturados por usuarios.
+      const popup = document.createElement('span');
+      popup.textContent = p.label;
+      marker.bindPopup(popup);
       if (p.kind === 'last') marker.openPopup();
     }
 

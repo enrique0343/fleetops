@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { AppError } from '../lib/http';
-import { authenticate, requireAdmin, requireDispatcher } from '../middleware/auth';
+import { authenticate, requireAdmin, requireDispatcher, requireRoles } from '../middleware/auth';
 import { TripService } from '../services/tripService';
 import { notifyTripFinished } from '../services/notification';
 import { requireFields } from '../lib/validate';
@@ -12,9 +12,12 @@ const trips = new Hono<AppEnv>();
 
 const dt = (v: any) => (v ? new Date(v) : new Date());
 
+// Conductor dueño del viaje o coordinación (se valida en el servicio).
+const actorOf = (c: any) => ({ userId: c.get('user').userId, role: c.get('user').role });
+
 // ─── DRIVER ROUTES ───
 
-trips.post('/start', authenticate, async (c) => {
+trips.post('/start', authenticate, requireRoles('DRIVER', 'ADMIN', 'DISPATCHER'), async (c) => {
   const body = await c.req.json().catch(() => ({}));
   // El origen ya no se elige: lo define la captura GPS de inicio (startLat/Lng).
   requireFields(body, ['vehicleId', 'destinationId']);
@@ -31,8 +34,9 @@ trips.post('/start', authenticate, async (c) => {
     vehicleId: body.vehicleId,
     originBranchId: body.originBranchId, // normalmente ausente (origen = GPS)
     destinationId: body.destinationId,
-    startLat: body.startLat,
-    startLng: body.startLng,
+    // Acepta también lat/lng (clientes anteriores enviaban ese nombre).
+    startLat: body.startLat ?? body.lat,
+    startLng: body.startLng ?? body.lng,
     comment: body.comment,
     deviceTimestamp: dt(body.deviceTimestamp),
     priority,
@@ -71,7 +75,7 @@ trips.get('/my/history', authenticate, async (c) => {
 trips.post('/:tripId/stop', authenticate, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const svc = new TripService(c.get('prisma'));
-  const trip = await svc.registerStop(c.req.param('tripId'), c.get('user').userId, {
+  const trip = await svc.registerStop(c.req.param('tripId'), actorOf(c), {
     comment: body.comment,
     lat: body.lat,
     lng: body.lng,
@@ -83,7 +87,7 @@ trips.post('/:tripId/stop', authenticate, async (c) => {
 trips.post('/:tripId/resume', authenticate, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const svc = new TripService(c.get('prisma'));
-  const trip = await svc.resumeTrip(c.req.param('tripId'), c.get('user').userId, {
+  const trip = await svc.resumeTrip(c.req.param('tripId'), actorOf(c), {
     comment: body.comment,
     lat: body.lat,
     lng: body.lng,
@@ -96,7 +100,7 @@ trips.post('/:tripId/incident', authenticate, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   if (!body.comment || String(body.comment).trim() === '') throw new AppError('El comentario es requerido');
   const svc = new TripService(c.get('prisma'));
-  const trip = await svc.reportIncident(c.req.param('tripId'), c.get('user').userId, {
+  const trip = await svc.reportIncident(c.req.param('tripId'), actorOf(c), {
     comment: body.comment,
     incidentTypeId: body.incidentTypeId,
     lat: body.lat,
@@ -196,10 +200,10 @@ trips.get('/:tripId/track', authenticate, async (c) => {
 trips.post('/:tripId/finish', authenticate, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const svc = new TripService(c.get('prisma'));
-  const trip = await svc.finishTrip(c.req.param('tripId'), c.get('user').userId, {
+  const trip = await svc.finishTrip(c.req.param('tripId'), actorOf(c), {
     comment: body.comment,
-    endLat: body.endLat,
-    endLng: body.endLng,
+    endLat: body.endLat ?? body.lat,
+    endLng: body.endLng ?? body.lng,
     closureBranchId: body.closureBranchId,
     deviceTimestamp: dt(body.deviceTimestamp),
   });
@@ -283,6 +287,10 @@ trips.post('/:tripId/retry-telegram', authenticate, requireAdmin, async (c) => {
 trips.get('/:tripId', authenticate, async (c) => {
   const svc = new TripService(c.get('prisma'));
   const trip = await svc.getTripDetail(c.req.param('tripId'));
+  const user = c.get('user');
+  if (trip.driverId !== user.userId && !['ADMIN', 'DISPATCHER'].includes(user.role)) {
+    throw new AppError('No tienes permiso para ver este viaje', 403);
+  }
   return c.json({ success: true, data: trip });
 });
 

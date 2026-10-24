@@ -3,6 +3,9 @@ import { coordinates, POSITION_MAX_AGE_MS, type DriverPosition } from './tripPro
 export type GpsState = 'locating' | 'live' | 'denied' | 'unavailable' | 'imprecise';
 export type SyncState = 'waiting' | 'saving' | 'saved' | 'error';
 export const REPORT_INTERVAL_MS = 30_000;
+// Margen para que el refresco de 30 s no quede justo bajo el umbral y la
+// cadencia real caiga a 60 s cuando el teléfono está quieto.
+const REPORT_SLACK_MS = 2_000;
 
 interface Options {
   geolocation?: Pick<Geolocation, 'watchPosition' | 'clearWatch' | 'getCurrentPosition'>;
@@ -28,7 +31,7 @@ export function startDriverLocation({ geolocation, report, onPosition, onGps, on
 
   function publish() {
     if (disposed || pending || !latest || latest.capturedAt <= lastReported ||
-        now() - latest.capturedAt > POSITION_MAX_AGE_MS || now() - lastAttempt < REPORT_INTERVAL_MS) return;
+        now() - latest.capturedAt > POSITION_MAX_AGE_MS || now() - lastAttempt < REPORT_INTERVAL_MS - REPORT_SLACK_MS) return;
     const fix = latest;
     pending = true;
     lastAttempt = now();

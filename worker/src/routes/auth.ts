@@ -23,41 +23,8 @@ async function signToken(c: any, payload: object): Promise<string> {
   return sign({ ...payload, exp }, c.env.JWT_SECRET);
 }
 
-// POST /api/auth/register
-auth.post('/register', async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  if (!isEmail(body.email)) throw new AppError('Datos inválidos: email');
-  if (!body.password || String(body.password).length < 8) throw new AppError('La contraseña debe tener al menos 8 caracteres');
-  requireFields(body, ['fullName']);
-
-  const prisma = c.get('prisma');
-  const email = normalizeEmail(body.email);
-
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) throw new AppError('Ya existe una cuenta con ese correo', 409);
-
-  const passwordHash = await hashPassword(body.password);
-  const user = await prisma.user.create({
-    data: {
-      email,
-      passwordHash,
-      fullName: body.fullName,
-      phone: body.phone || null,
-      branchId: body.branchId || null,
-      role: 'DRIVER', // Self-registration always creates DRIVER
-    },
-  });
-
-  const token = await signToken(c, { userId: user.id, email: user.email, role: user.role });
-
-  return c.json(
-    {
-      success: true,
-      data: { token, user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role } },
-    },
-    201
-  );
-});
+// El autorregistro está deshabilitado: las cuentas las crea un ADMIN
+// desde Catálogos → Usuarios (POST /api/catalogs/users).
 
 // POST /api/auth/login
 auth.post('/login', async (c) => {

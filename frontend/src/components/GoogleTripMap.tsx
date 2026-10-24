@@ -67,7 +67,10 @@ export default function GoogleTripMap({
               strokeWeight: 2,
             },
           });
-          const info = new google.maps.InfoWindow({ content: p.label });
+          // Texto plano, nunca HTML: la etiqueta puede incluir nombres de usuarios.
+          const content = document.createElement('span');
+          content.textContent = p.label;
+          const info = new google.maps.InfoWindow({ content });
           marker.addListener('click', () => info.open({ anchor: marker, map }));
           if (p.kind === 'last') info.open({ anchor: marker, map });
           layersRef.current.push(marker);

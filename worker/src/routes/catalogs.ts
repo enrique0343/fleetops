@@ -87,6 +87,14 @@ catalogs.get('/vehicles', authenticate, async (c) => {
     include: { branch: true },
     orderBy: { plate: 'asc' },
   });
+  // Solo coordinación ve el id del viaje en curso; al resto se le indica
+  // que la unidad está en uso sin exponer el identificador del viaje.
+  if (!['ADMIN', 'DISPATCHER'].includes(c.get('user').role)) {
+    return c.json({
+      success: true,
+      data: vehicles.map((v) => ({ ...v, currentTripId: v.currentTripId ? 'IN_USE' : null })),
+    });
+  }
   return c.json({ success: true, data: vehicles });
 });
 

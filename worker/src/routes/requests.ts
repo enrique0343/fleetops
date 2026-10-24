@@ -143,6 +143,18 @@ requests.get('/:id', authenticate, async (c) => {
 // ─── Lifecycle actions ───
 requests.post('/:id/cancel', authenticate, async (c) => {
   const body = await c.req.json().catch(() => ({}));
+  const user = c.get('user');
+  // Coordinación cancela cualquier solicitud; el solicitante solo las suyas
+  // y antes de que salga el vehículo.
+  if (!['ADMIN', 'DISPATCHER'].includes(user.role)) {
+    const req = await c.get('prisma').transportRequest.findUnique({
+      where: { id: c.req.param('id') },
+      select: { requesterId: true, status: true },
+    });
+    if (!req) throw new AppError('Solicitud no encontrada', 404);
+    if (req.requesterId !== user.userId) throw new AppError('No tienes permiso para cancelar esta solicitud', 403);
+    if (req.status === 'DISPATCHED') throw new AppError('El vehículo ya salió; pide a coordinación que la cancele', 400);
+  }
   const svc = new RequestService(c.get('prisma'));
   const data = await svc.cancel(c.req.param('id'), c.get('user').userId, body.reason);
   return c.json({ success: true, data });

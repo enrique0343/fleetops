@@ -24,6 +24,20 @@ interface EventInput {
 
 const ACTIVE_STATUSES = ['IN_TRANSIT', 'IN_STOP', 'IN_INCIDENT'];
 
+// Quién ejecuta la acción sobre el viaje: el conductor dueño o coordinación.
+export interface TripActor {
+  userId: string;
+  role: string;
+}
+
+const STAFF_ROLES = ['ADMIN', 'DISPATCHER'];
+
+function assertCanOperate(trip: { driverId: string }, actor: TripActor) {
+  if (trip.driverId !== actor.userId && !STAFF_ROLES.includes(actor.role)) {
+    throw new AppError('No eres el conductor de este viaje', 403);
+  }
+}
+
 const VALID_TRANSITIONS: Record<string, string[]> = {
   IN_TRANSIT: ['IN_STOP', 'IN_INCIDENT', 'FINISHED'],
   IN_STOP: ['IN_TRANSIT', 'IN_INCIDENT', 'FINISHED'],
@@ -118,17 +132,23 @@ export class TripService {
     return { data: trips, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  registerStop(tripId: string, userId: string, input: EventInput) {
-    return this.transitionTrip(tripId, userId, 'IN_STOP', 'ARRIVE_STOP', input);
+  registerStop(tripId: string, actor: TripActor, input: EventInput) {
+    return this.transitionTrip(tripId, actor, 'IN_STOP', 'ARRIVE_STOP', input);
   }
 
-  resumeTrip(tripId: string, userId: string, input: EventInput) {
-    return this.transitionTrip(tripId, userId, 'IN_TRANSIT', 'RESUME_TRIP', input);
+  resumeTrip(tripId: string, actor: TripActor, input: EventInput) {
+    return this.transitionTrip(tripId, actor, 'IN_TRANSIT', 'RESUME_TRIP', input);
   }
 
-  async reportIncident(tripId: string, userId: string, input: EventInput & { incidentTypeId?: string }) {
+  async reportIncident(tripId: string, actor: TripActor, input: EventInput & { incidentTypeId?: string }) {
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId } });
     if (!trip) throw new AppError('Viaje no encontrado', 404);
+    assertCanOperate(trip, actor);
+    // Un incidente solo se reporta sobre un viaje activo: nunca reabre uno cerrado.
+    if (!ACTIVE_STATUSES.includes(trip.status)) {
+      throw new AppError('El viaje no está activo', 400);
+    }
+    const userId = actor.userId;
 
     await this.prisma.tripEvent.create({
       data: {
@@ -151,13 +171,15 @@ export class TripService {
 
   private async transitionTrip(
     tripId: string,
-    userId: string,
+    actor: TripActor,
     newStatus: string,
     eventType: string,
     input: EventInput
   ) {
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId } });
     if (!trip) throw new AppError('Viaje no encontrado', 404);
+    assertCanOperate(trip, actor);
+    const userId = actor.userId;
 
     const allowed = VALID_TRANSITIONS[trip.status] || [];
     if (!allowed.includes(newStatus)) {
@@ -185,11 +207,13 @@ export class TripService {
 
   async finishTrip(
     tripId: string,
-    userId: string,
+    actor: TripActor,
     input: EventInput & { endLat?: number; endLng?: number; closureBranchId?: string }
   ) {
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId } });
     if (!trip) throw new AppError('Viaje no encontrado', 404);
+    assertCanOperate(trip, actor);
+    const userId = actor.userId;
     if (trip.status === 'FINISHED' || trip.status === 'CANCELLED') {
       throw new AppError('El viaje ya está finalizado', 400);
     }
@@ -230,7 +254,11 @@ export class TripService {
     ]);
 
     // If this trip came from an appointment or a route plan, close the loop.
-    if (trip.requestId) {
+    // Solo se completa una solicitud despachada: una cancelada no se sobrescribe.
+    const request = trip.requestId
+      ? await this.prisma.transportRequest.findUnique({ where: { id: trip.requestId }, select: { status: true } })
+      : null;
+    if (trip.requestId && request?.status === 'DISPATCHED') {
       await this.prisma.$transaction([
         this.prisma.transportRequest.update({
           where: { id: trip.requestId },
